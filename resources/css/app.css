@@ -1,0 +1,202 @@
+@import 'tailwindcss';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@plugin "daisyui" {
+    themes: false;
+}
+
+@plugin "daisyui/theme" {
+    name: "vb";
+    default: true;
+    color-scheme: light;
+    --color-base-100: oklch(100% 0 0);
+    --color-base-200: oklch(97.5% 0.008 270);
+    --color-base-300: oklch(93% 0.015 270);
+    --color-base-content: oklch(20% 0.03 270);
+    --color-primary: oklch(55% 0.24 277);
+    --color-primary-content: oklch(98% 0.01 277);
+    --color-secondary: oklch(65% 0.24 350);
+    --color-secondary-content: oklch(98% 0.01 350);
+    --color-accent: oklch(70% 0.15 220);
+    --color-accent-content: oklch(98% 0.01 220);
+    --color-neutral: oklch(30% 0.04 270);
+    --color-neutral-content: oklch(97% 0.01 270);
+    --color-info: oklch(70% 0.15 230);
+    --color-info-content: oklch(98% 0.01 230);
+    --color-success: oklch(70% 0.17 160);
+    --color-success-content: oklch(98% 0.01 160);
+    --color-warning: oklch(80% 0.17 80);
+    --color-warning-content: oklch(30% 0.06 80);
+    --color-error: oklch(65% 0.22 15);
+    --color-error-content: oklch(98% 0.01 15);
+    --radius-selector: 1rem;
+    --radius-field: 0.6rem;
+    --radius-box: 1rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 1;
+    --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+    name: "vb-dark";
+    default: false;
+    color-scheme: dark;
+    --color-base-100: oklch(24% 0.03 275);
+    --color-base-200: oklch(20% 0.03 275);
+    --color-base-300: oklch(30% 0.035 275);
+    --color-base-content: oklch(94% 0.01 275);
+    --color-primary: oklch(68% 0.2 277);
+    --color-primary-content: oklch(15% 0.03 277);
+    --color-secondary: oklch(72% 0.2 350);
+    --color-secondary-content: oklch(15% 0.03 350);
+    --color-accent: oklch(75% 0.14 220);
+    --color-accent-content: oklch(15% 0.03 220);
+    --color-neutral: oklch(32% 0.04 275);
+    --color-neutral-content: oklch(95% 0.01 275);
+    --color-info: oklch(75% 0.14 230);
+    --color-info-content: oklch(15% 0.03 230);
+    --color-success: oklch(75% 0.16 160);
+    --color-success-content: oklch(15% 0.03 160);
+    --color-warning: oklch(82% 0.16 80);
+    --color-warning-content: oklch(20% 0.05 80);
+    --color-error: oklch(70% 0.2 15);
+    --color-error-content: oklch(15% 0.03 15);
+    --radius-selector: 1rem;
+    --radius-field: 0.6rem;
+    --radius-box: 1rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 0;
+    --noise: 0;
+}
+
+@layer base {
+    body {
+        min-height: 100vh;
+        background:
+            radial-gradient(50rem 28rem at 0% -10%, rgb(99 102 241 / .15), transparent 60%),
+            radial-gradient(45rem 28rem at 100% 0%, rgb(236 72 153 / .12), transparent 60%),
+            #f6f7fb;
+        background-attachment: fixed;
+    }
+    [data-theme='vb-dark'] body {
+        background:
+            radial-gradient(50rem 28rem at 0% -10%, rgb(99 102 241 / .22), transparent 60%),
+            radial-gradient(45rem 28rem at 100% 0%, rgb(236 72 153 / .14), transparent 60%),
+            #0f1120;
+        background-attachment: fixed;
+    }
+    /* Soft dot pattern over the gradient background */
+    body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image: radial-gradient(rgb(99 102 241 / .14) 1px, transparent 1px);
+        background-size: 22px 22px;
+        mask-image: linear-gradient(to bottom, #000, transparent 70%);
+    }
+    audio { height: 36px; max-width: 100%; }
+    code { @apply rounded bg-base-200 px-1 py-0.5 text-[11px]; }
+}
+
+@layer components {
+    .vb-title {
+        @apply text-2xl font-bold tracking-tight inline-block;
+        background: linear-gradient(90deg, #4f46e5, #db2777);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+    .vb-logo {
+        @apply inline-flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-md;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6 55%, #ec4899);
+    }
+    .vb-card { @apply card bg-base-100 text-base-content shadow-lg shadow-indigo-100 ring-1 ring-indigo-50; }
+    [data-theme='vb-dark'] .vb-card { @apply shadow-none ring-white/10; }
+    .vb-table { @apply table table-zebra; }
+    .vb-table thead tr { @apply bg-gradient-to-r from-indigo-50 via-violet-50 to-pink-50 text-indigo-700 text-xs uppercase tracking-wide; }
+    [data-theme='vb-dark'] .vb-table thead tr { @apply from-indigo-500/20 via-violet-500/15 to-pink-500/20 text-indigo-200; }
+    .vb-stat {
+        @apply relative overflow-hidden rounded-2xl p-5 text-slate-900 shadow-lg transition hover:-translate-y-0.5;
+    }
+    .vb-stat::after { content: ''; @apply absolute -right-7 -top-7 h-24 w-24 rounded-full bg-white/40; }
+    .vb-stat .label { @apply text-sm font-semibold text-slate-800; }
+    .vb-stat .value { @apply mt-1 text-3xl font-bold; }
+    .vb-indigo { @apply bg-gradient-to-br from-indigo-200 to-violet-300; }
+    .vb-pink { @apply bg-gradient-to-br from-pink-200 to-rose-300; }
+    .vb-sky { @apply bg-gradient-to-br from-sky-200 to-cyan-300; }
+    .vb-emerald { @apply bg-gradient-to-br from-emerald-200 to-teal-300; }
+    .vb-amber { @apply bg-gradient-to-br from-amber-200 to-orange-300; }
+    /* Theme toggle: show the icon for the theme you will switch to */
+    [data-theme='vb'] .vb-icon-sun, [data-theme='vb-dark'] .vb-icon-moon { display: none; }
+    [data-theme='vb-dark'] .vb-title { background: linear-gradient(90deg, #a5b4fc, #f9a8d4); -webkit-background-clip: text; background-clip: text; }
+
+    /* Floating glass header */
+    .vb-header {
+        background-color: rgb(255 255 255 / .78);
+        --tw-ring-color: rgb(99 102 241 / .15);
+        box-shadow: 0 10px 30px -12px rgb(79 70 229 / .35);
+    }
+    [data-theme='vb-dark'] .vb-header {
+        background-color: rgb(28 29 52 / .75);
+        --tw-ring-color: rgb(255 255 255 / .10);
+        box-shadow: 0 10px 30px -12px rgb(0 0 0 / .6);
+    }
+    .vb-header .menu-active { background: linear-gradient(90deg, #6366f1, #8b5cf6); color: #fff; }
+
+    /* Footer */
+    .vb-footer {
+        background-color: rgb(255 255 255 / .7);
+        box-shadow: 0 0 0 1px rgb(99 102 241 / .12), 0 10px 30px -15px rgb(79 70 229 / .3);
+        backdrop-filter: blur(10px);
+    }
+    [data-theme='vb-dark'] .vb-footer {
+        background-color: rgb(28 29 52 / .7);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / .08);
+    }
+
+    /* Hero banner (dashboard welcome, login panel) */
+    .vb-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 1.5rem;
+        padding: 1.75rem;
+        background: linear-gradient(120deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
+        box-shadow: 0 20px 40px -20px rgb(79 70 229 / .6);
+    }
+    .vb-hero::before, .vb-hero::after {
+        content: '';
+        position: absolute;
+        border-radius: 9999px;
+        background: rgb(255 255 255 / .12);
+    }
+    .vb-hero::before { width: 16rem; height: 16rem; right: -4rem; top: -6rem; }
+    .vb-hero::after { width: 10rem; height: 10rem; right: 12rem; bottom: -6rem; background: rgb(255 255 255 / .08); }
+    @media (min-width: 640px) { .vb-hero { padding: 2.25rem; } }
+
+    /* Page polish */
+    .vb-main > h1.vb-title { display: block; width: fit-content; position: relative; padding-bottom: .6rem; }
+    .vb-main > h1.vb-title::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 3rem;
+        height: 4px;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #6366f1, #ec4899);
+    }
+    .vb-main { animation: vb-fade .35s ease-out both; }
+    @keyframes vb-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .vb-main { animation: none; } }
+    .vb-card { transition: box-shadow .2s, transform .2s; }
+    .vb-card:hover { box-shadow: 0 14px 30px -12px rgb(79 70 229 / .35); }
+}
