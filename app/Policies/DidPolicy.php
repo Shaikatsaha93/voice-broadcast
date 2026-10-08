@@ -12,14 +12,19 @@ class DidPolicy
         return $u->isSuperAdmin() || $u->dids()->whereKey($d->id)->exists();
     }
 
-    /** Using a DID in a campaign: must be assigned (admins use DIDs through the owner's assignment only). */
+    /** Using a DID in a campaign: must be assigned (Admins also use the DIDs they created, Super Admin any). */
     public function use(User $u, Did $d): bool
     {
-        return $d->isActive() && $u->dids()->whereKey($d->id)->exists();
+        return $d->isActive() && $u->usableDids()->whereKey($d->id)->exists();
     }
 
-    public function manage(User $u, ?Did $d = null): bool
+    /** List / create: Super Admin and Admin. A specific DID: Super Admin, or the Admin who created it. */
+    public function manage(User $u, Did|string|null $d = null): bool
     {
-        return $u->isSuperAdmin();
+        if (! $d instanceof Did) {
+            return $u->isManager();
+        }
+
+        return $u->isSuperAdmin() || ($u->isAdmin() && $d->created_by === $u->id);
     }
 }

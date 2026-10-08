@@ -40,14 +40,25 @@ class CampaignDispatcher
 
             if (! $this->slots->acquire($attempt)) {
                 $this->undoClaim($attempt);
+                // No balance: no call is generated. The campaign keeps waiting and resumes by itself after a top-up.
+                $this->setBlocked($campaign, $this->slots->lastDenial === 'balance' ? 'INSUFFICIENT_BALANCE' : null);
                 break; // capacity full; slots freed by finalize re-trigger dispatch
             }
+            $this->setBlocked($campaign, null);
 
             OriginateBroadcastCall::dispatch($attempt->id);
             $queued++;
         }
 
         return $queued;
+    }
+
+    private function setBlocked(Campaign $campaign, ?string $reason): void
+    {
+        if ($campaign->blocked_reason !== $reason) {
+            Campaign::whereKey($campaign->id)->update(['blocked_reason' => $reason]);
+            $campaign->blocked_reason = $reason;
+        }
     }
 
     private function claimNext(Campaign $campaign): ?CallAttempt

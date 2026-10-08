@@ -9,6 +9,6 @@ class CallAttemptPolicy
 {
     public function view(User $u, CallAttempt $a): bool
     {
-        return $u->isSuperAdmin() || $a->user_id === $u->id;
+        return $a->user_id === $u->id || $u->canViewActivityOf($a->user);
     }
 }

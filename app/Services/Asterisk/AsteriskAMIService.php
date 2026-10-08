@@ -53,6 +53,61 @@ class AsteriskAMIService
         }
     }
 
+    /** Run a CLI command (needs AMI "command" write permission). */
+    public function command(string $cmd): bool
+    {
+        try {
+            if (! $this->connect()) {
+                return false;
+            }
+            $r = $this->action(['Action' => 'Command', 'Command' => $cmd]);
+
+            return ($r['Response'] ?? '') !== 'Error';
+        } catch (\Throwable $e) {
+            Log::error('AMI command failed', ['cmd' => $cmd, 'error' => $e->getMessage()]);
+
+            return false;
+        } finally {
+            $this->disconnect();
+        }
+    }
+
+    /**
+     * Run an AMI action that answers with a list of events (EventList ... Complete).
+     *
+     * @return array<int, array<string, string>>|null events, or null when Asterisk is unreachable / refused
+     */
+    public function eventList(array $fields): ?array
+    {
+        try {
+            if (! $this->connect(2)) {
+                return null;
+            }
+            $first = $this->action($fields);
+            if (($first['Response'] ?? '') === 'Error') {
+                return null;
+            }
+            $events = [];
+            $deadline = microtime(true) + 5;
+            while (microtime(true) < $deadline && ($m = $this->readMessage()) !== null) {
+                if (($m['EventList'] ?? '') === 'Complete') {
+                    return $events;
+                }
+                if (isset($m['Event'])) {
+                    $events[] = $m;
+                }
+            }
+
+            return $events;
+        } catch (\Throwable $e) {
+            Log::warning('AMI event list failed', ['error' => $e->getMessage()]);
+
+            return null;
+        } finally {
+            $this->disconnect();
+        }
+    }
+
     public function action(array $fields): array
     {
         $out = '';
@@ -63,7 +118,14 @@ class AsteriskAMIService
         }
         fwrite($this->sock, $out."\r\n");
 
-        return $this->readMessage() ?? [];
+        // Skip unrelated async events (e.g. FullyBooted) until the action's own response arrives.
+        while (($m = $this->readMessage()) !== null) {
+            if (isset($m['Response'])) {
+                return $m;
+            }
+        }
+
+        return [];
     }
 
     /** Read one AMI message (block of Key: Value lines); null on timeout/disconnect. */

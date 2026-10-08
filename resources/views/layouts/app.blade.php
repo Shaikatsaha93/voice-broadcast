@@ -36,6 +36,12 @@
             ['DIDs', 'admin.dids.index', 'admin/dids*', 'bi-telephone'],
             ['Audit', 'admin.audit', 'admin/audit*', 'bi-journal-text'],
         ]);
+    } elseif (auth()->check() && auth()->user()->isAdmin()) {
+        $links = array_merge($links, [
+            ['Approvals', 'admin.approvals', 'admin/approvals*', 'bi-check2-circle'],
+            ['Users', 'admin.users.index', 'admin/users*', 'bi-people'],
+            ['DIDs', 'admin.dids.index', 'admin/dids*', 'bi-telephone'],
+        ]);
     }
 @endphp
 
@@ -87,6 +93,7 @@
 
 <main class="vb-main mx-auto w-full max-w-[90rem] flex-1 px-4 py-6 sm:py-8">
     @if(session('status'))<div role="alert" class="alert alert-success alert-soft mb-5"><i class="bi bi-check-circle-fill"></i><span>{{ session('status') }}</span></div>@endif
+    @if(session('warning'))<div role="alert" class="alert alert-warning alert-soft mb-5"><i class="bi bi-exclamation-circle-fill"></i><span>{{ session('warning') }}</span></div>@endif
     @if($errors->any())<div role="alert" class="alert alert-error alert-soft mb-5"><i class="bi bi-exclamation-triangle-fill"></i><div>@foreach($errors->all() as $e)<div>{{ $e }}</div>@endforeach</div></div>@endif
     @yield('content')
 </main>

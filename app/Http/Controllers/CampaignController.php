@@ -29,7 +29,12 @@ class CampaignController extends Controller
 
     public function create(Request $request)
     {
-        return view('campaigns.form', ['campaign' => new Campaign(['max_attempts' => 1, 'requested_concurrency' => 1]), 'dids' => $request->user()->dids()->where('status', 'active')->get(), 'audios' => $request->user()->isSuperAdmin() ? collect() : \App\Models\AudioFile::where('user_id', $request->user()->id)->where('status', 'READY')->get()]);
+        return view('campaigns.form', ['campaign' => new Campaign(['max_attempts' => 1, 'requested_concurrency' => 1]), 'dids' => $request->user()->usableDids()->get(), 'audios' => $this->audiosFor($request->user())]);
+    }
+
+    private function audiosFor(\App\Models\User $user)
+    {
+        return $user->limitToVisibleOwners(\App\Models\AudioFile::query(), 'audio_files.user_id')->where('status', 'READY')->get();
     }
 
     public function store(CampaignRequest $request)
@@ -50,16 +55,19 @@ class CampaignController extends Controller
     {
         Gate::authorize('view', $campaign);
         $campaign->load('did', 'audio', 'user', 'imports');
-        $stats = $campaign->recipients()->selectRaw('status, count(*) c')->groupBy('status')->pluck('c', 'status');
+        $stats = $this->service->outcomeCounts($campaign); // numbers that can be retried now, per result
+        $calls = $this->service->callCounts($campaign); // calls made, per result (same as the call report)
+        $waiting = $this->service->waitingCounts($campaign); // numbers still waiting for an automatic retry
+        $totals = ['numbers' => $campaign->recipients()->count(), 'calls' => array_sum(array_slice($calls, 0, 4)), 'to_call' => $campaign->recipients()->whereIn('status', ['PENDING', 'IN_PROGRESS', 'RETRY_PENDING'])->count()];
 
-        return view('campaigns.show', ['campaign' => $campaign, 'stats' => $stats, 'active' => \App\Models\DidSlot::whereIn('call_attempt_id', $campaign->attempts()->select('id'))->count()]);
+        return view('campaigns.show', ['campaign' => $campaign, 'stats' => $stats, 'calls' => $calls, 'waiting' => $waiting, 'totals' => $totals, 'active' => \App\Models\DidSlot::whereIn('call_attempt_id', $campaign->attempts()->select('id'))->count()]);
     }
 
     public function edit(Request $request, Campaign $campaign)
     {
         Gate::authorize('update', $campaign);
 
-        return view('campaigns.form', ['campaign' => $campaign, 'dids' => $request->user()->dids()->where('status', 'active')->get(), 'audios' => \App\Models\AudioFile::where('user_id', $request->user()->id)->where('status', 'READY')->get()]);
+        return view('campaigns.form', ['campaign' => $campaign, 'dids' => $request->user()->usableDids()->get(), 'audios' => $this->audiosFor($request->user())]);
     }
 
     public function update(CampaignRequest $request, Campaign $campaign)
@@ -152,5 +160,14 @@ class CampaignController extends Controller
         $this->service->cancel($campaign);
 
         return back()->with('status', 'Campaign cancelled.');
+    }
+
+    public function retry(Request $request, Campaign $campaign)
+    {
+        Gate::authorize('control', $campaign);
+        $sections = $request->validate(['sections' => 'required|array|min:1', 'sections.*' => 'string'], ['sections.required' => 'Select at least one call section to retry.'])['sections'];
+        $n = $this->service->retry($campaign, $sections);
+
+        return back()->with('status', "{$n} call(s) re-queued for retry.");
     }
 }

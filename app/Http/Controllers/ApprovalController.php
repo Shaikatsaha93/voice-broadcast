@@ -15,10 +15,11 @@ class ApprovalController extends Controller
     {
     }
 
-    public function index()
+    /** Super Admin: every pending campaign. Admin: only those of the normal users they created. */
+    public function index(Request $request)
     {
-        Gate::authorize('manage', \App\Models\User::class);
-        $campaigns = Campaign::where('status', CampaignStatus::PENDING_APPROVAL)->with('user:id,name', 'did', 'audio')->withCount('recipients')->oldest('submitted_at')->paginate(20);
+        abort_unless($request->user()->isManager(), 403);
+        $campaigns = Campaign::visibleTo($request->user())->where('status', CampaignStatus::PENDING_APPROVAL)->with('user:id,name', 'did', 'audio')->withCount('recipients')->oldest('submitted_at')->paginate(20);
 
         return view('admin.approvals', compact('campaigns'));
     }
@@ -28,7 +29,7 @@ class ApprovalController extends Controller
         Gate::authorize('approve', $campaign);
         $this->service->approve($campaign, $request->user());
 
-        return redirect()->route('admin.approvals')->with('status', 'Campaign approved. The owner (or you) must start it.');
+        return redirect()->route('admin.approvals')->with('status', 'Campaign approved. The owner can now start it.');
     }
 
     public function reject(RejectCampaignRequest $request, Campaign $campaign)

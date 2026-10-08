@@ -3,6 +3,7 @@
 namespace App\Services\Asterisk;
 
 use App\Enums\CallStatus;
+use App\Jobs\FinalizeOriginateFailure;
 use App\Models\CallAttempt;
 use App\Services\Calls\CallLifecycle;
 use Illuminate\Database\QueryException;
@@ -14,6 +15,9 @@ use Illuminate\Support\Facades\DB;
  */
 class AsteriskEventProcessor
 {
+    /** An unanswered call that ended after at least this many seconds of ringing is "no answer". */
+    private const RING_TIMEOUT_SECONDS = 20;
+
     public function __construct(private CallLifecycle $life)
     {
     }
@@ -44,9 +48,7 @@ class AsteriskEventProcessor
             'Newstate' => $this->newState($attempt, $e, $ids),
             'DialEnd' => $this->dialEnd($attempt, $e, $ids),
             'UserEvent' => $this->userEvent($attempt, $e, $ids),
-            'OriginateResponse' => ($e['Response'] ?? '') === 'Failure'
-                ? $this->life->finalize($attempt, $this->fromReason($e['Reason'] ?? ''), ['hangup_cause' => 'ORIG_'.($e['Reason'] ?? '?')] + $ids)
-                : null,
+            'OriginateResponse' => ($e['Response'] ?? '') === 'Failure' ? $this->originateFailed($attempt, $e, $ids) : null,
             'Hangup' => $this->hangup($attempt, $e, $ids),
             default => null,
         };
@@ -95,6 +97,11 @@ class AsteriskEventProcessor
         if ($outcome === CallStatus::COMPLETED && ! $a->answered_at) {
             $outcome = CallStatus::NO_ANSWER;
         }
+        // Many carriers end an unanswered call after their ring timeout (~30 s) with cause 21 ("rejected").
+        // A real decline comes back within seconds, so after a long ring it is simply "no answer".
+        if ($outcome === CallStatus::BUSY && $cause === '21' && $duration >= self::RING_TIMEOUT_SECONDS) {
+            $outcome = CallStatus::NO_ANSWER;
+        }
         $this->life->finalize($a, $outcome, $ids + ['hangup_cause' => $cause, 'ended_at' => $end, 'duration' => (int) $duration, 'billsec' => (int) $billsec]);
     }
 
@@ -102,7 +109,7 @@ class AsteriskEventProcessor
     public function outcome(?string $dialStatus, string $cause): CallStatus
     {
         return match (true) {
-            $dialStatus === 'BUSY' || $cause === '17' => CallStatus::BUSY,
+            $dialStatus === 'BUSY' || in_array($cause, ['17', '21'], true) => CallStatus::BUSY, // 21 = call rejected / declined by the callee
             $dialStatus === 'NOANSWER' || in_array($cause, ['18', '19'], true) => CallStatus::NO_ANSWER,
             $dialStatus === 'CANCEL' => CallStatus::NO_ANSWER,
             in_array($cause, ['1', '22', '28'], true) => CallStatus::INVALID_NUMBER,
@@ -110,6 +117,27 @@ class AsteriskEventProcessor
             $dialStatus === 'ANSWER' || $cause === '16' => CallStatus::COMPLETED, // answered_at turns this into ANSWERED; unanswered normal clearing is mapped below
             default => CallStatus::FAILED,
         };
+    }
+
+    /**
+     * Failed originate: remember the coarse reason, then give the Hangup event (it carries the real
+     * cause) a few seconds to finalize the attempt. FinalizeOriginateFailure covers the case it never comes.
+     */
+    private function originateFailed(CallAttempt $a, array $e, array $ids): void
+    {
+        $reason = (string) ($e['Reason'] ?? '?');
+        $a->update($ids + ['hangup_cause' => 'ORIG_'.$reason]);
+        FinalizeOriginateFailure::dispatch($a->id, $reason)->delay(3);
+    }
+
+    public function finalizeOriginateFailure(CallAttempt $a, string $reason): void
+    {
+        $outcome = $this->fromReason($reason);
+        // Reason 0 after a full ring period (no answer, no busy signal) is an unanswered call, not a failure.
+        if ($outcome === CallStatus::FAILED && $reason === '0' && $a->dialed_at && $a->dialed_at->diffInSeconds(now()) >= self::RING_TIMEOUT_SECONDS) {
+            $outcome = CallStatus::NO_ANSWER;
+        }
+        $this->life->finalize($a, $outcome, ['hangup_cause' => 'ORIG_'.$reason]);
     }
 
     private function fromReason(string $reason): CallStatus

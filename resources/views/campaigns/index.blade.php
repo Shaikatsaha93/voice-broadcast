@@ -2,7 +2,7 @@
 @section('content')
 <div class="mb-5 flex items-center justify-between gap-3">
     <h1 class="vb-title">Campaigns</h1>
-    @unless(auth()->user()->isSuperAdmin())<a class="btn btn-primary btn-sm sm:btn-md" href="{{ route('campaigns.create') }}"><i class="bi bi-plus-lg"></i>New campaign</a>@endunless
+    <a class="btn btn-primary btn-sm sm:btn-md" href="{{ route('campaigns.create') }}"><i class="bi bi-plus-lg"></i>New campaign</a>
 </div>
 <div class="vb-card overflow-x-auto p-2">
     <table class="vb-table">

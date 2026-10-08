@@ -3,6 +3,7 @@
 namespace App\Services\Asterisk;
 
 use App\Models\CallAttempt;
+use App\Services\Audio\AsteriskAudio;
 
 /**
  * Single entry point between Laravel and Asterisk. Controllers/jobs depend on
@@ -33,7 +34,7 @@ class AsteriskService
 
         $campaign = $attempt->campaign()->with('audio', 'did')->first();
         $did = $campaign->did;
-        $audio = $campaign->audio?->normalized_path ?? $campaign->audio?->path;
+        $audio = app(AsteriskAudio::class)->playPath($campaign->audio);
 
         return $this->ami->originate([
             'Channel' => str_replace('{number}', $attempt->phone, $did->trunk ?: config('broadcast.asterisk.trunk')),
@@ -44,7 +45,7 @@ class AsteriskService
             'ChannelId' => $attempt->call_ref,
             'Timeout' => config('broadcast.originate_timeout_ms'),
             'Async' => 'true',
-            'Variable' => ['CALL_REF='.$attempt->call_ref, 'AUDIO_FILE='.pathinfo((string) $audio, PATHINFO_DIRNAME).'/'.pathinfo((string) $audio, PATHINFO_FILENAME)],
+            'Variable' => ['CALL_REF='.$attempt->call_ref, 'AUDIO_FILE='.$audio],
         ]);
     }
 

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CampaignRecipient extends Model
 {
-    protected $fillable = ['campaign_id', 'phone', 'status', 'attempts_count', 'next_attempt_at', 'final_result'];
+    protected $fillable = ['campaign_id', 'phone', 'status', 'attempts_count', 'retry_base', 'next_attempt_at', 'final_result'];
 
     protected function casts(): array
     {

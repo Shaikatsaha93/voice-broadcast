@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CallAttempt extends Model
 {
-    protected $fillable = ['call_ref', 'campaign_id', 'recipient_id', 'did_id', 'user_id', 'phone', 'attempt_no', 'status', 'status_rank', 'asterisk_uniqueid', 'asterisk_linkedid', 'channel', 'hangup_cause', 'dial_status', 'dialed_at', 'answered_at', 'ended_at', 'duration', 'billsec', 'finalized'];
+    protected $fillable = ['call_ref', 'campaign_id', 'recipient_id', 'did_id', 'user_id', 'phone', 'attempt_no', 'status', 'status_rank', 'asterisk_uniqueid', 'asterisk_linkedid', 'channel', 'hangup_cause', 'dial_status', 'dialed_at', 'answered_at', 'ended_at', 'duration', 'billsec', 'pulses', 'cost', 'billed_at', 'finalized'];
 
     protected function casts(): array
     {
-        return ['status' => CallStatus::class, 'dialed_at' => 'datetime', 'answered_at' => 'datetime', 'ended_at' => 'datetime', 'finalized' => 'boolean'];
+        return ['status' => CallStatus::class, 'dialed_at' => 'datetime', 'answered_at' => 'datetime', 'ended_at' => 'datetime', 'billed_at' => 'datetime', 'finalized' => 'boolean'];
     }
 
     public function campaign(): BelongsTo
@@ -31,6 +31,11 @@ class CallAttempt extends Model
         return $this->belongsTo(Did::class);
     }
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function slot(): HasOne
     {
         return $this->hasOne(DidSlot::class);
@@ -38,6 +43,6 @@ class CallAttempt extends Model
 
     public function scopeVisibleTo($q, User $user)
     {
-        return $user->isSuperAdmin() ? $q : $q->where('call_attempts.user_id', $user->id);
+        return $user->limitToVisibleOwners($q, 'call_attempts.user_id');
     }
 }

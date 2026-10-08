@@ -25,7 +25,7 @@ enum CampaignStatus: string
             'QUEUED' => ['RUNNING', 'PAUSED', 'CANCELLED'],
             'RUNNING' => ['PAUSED', 'COMPLETED', 'CANCELLED', 'FAILED'],
             'PAUSED' => ['RUNNING', 'CANCELLED'],
-            'COMPLETED' => [], 'REJECTED' => [], 'CANCELLED' => [], 'FAILED' => [],
+            'COMPLETED' => ['RUNNING'], 'CANCELLED' => ['RUNNING'], 'REJECTED' => [], 'FAILED' => [],
         ];
     }
 

@@ -20,8 +20,12 @@ use Illuminate\Support\Facades\DB;
  */
 class DidSlotManager
 {
+    /** Why the last acquire() said no: 'capacity' | 'balance' | 'inactive' | null (granted). */
+    public ?string $lastDenial = null;
+
     public function acquire(CallAttempt $attempt): bool
     {
+        $this->lastDenial = null;
         $lock = Cache::lock('did-slot:'.$attempt->did_id, 10);
 
         try {
@@ -38,6 +42,8 @@ class DidSlotManager
                 $did = Did::whereKey($attempt->did_id)->lockForUpdate()->first();
 
                 if (! $did || ! $did->isActive()) {
+                    $this->lastDenial = 'inactive';
+
                     return false;
                 }
 
@@ -45,13 +51,25 @@ class DidSlotManager
                     return true; // idempotent: duplicate job
                 }
 
-                if (DidSlot::where('did_id', $did->id)->count() >= $did->max_concurrent_calls) {
+                $inFlight = DidSlot::where('did_id', $did->id)->count();
+                if ($inFlight >= $did->max_concurrent_calls) {
+                    $this->lastDenial = 'capacity';
+
                     return false;
                 }
 
                 $campaign = $attempt->campaign()->first();
                 $campaignActive = DidSlot::whereIn('call_attempt_id', CallAttempt::where('campaign_id', $attempt->campaign_id)->select('id'))->count();
                 if ($campaignActive >= min($campaign->requested_concurrency, $did->max_concurrent_calls)) {
+                    $this->lastDenial = 'capacity';
+
+                    return false;
+                }
+
+                // Prepaid balance: it must cover one pulse for this call plus one for every call already in flight.
+                if (! $did->canAffordAnotherCall($inFlight)) {
+                    $this->lastDenial = 'balance';
+
                     return false;
                 }
 

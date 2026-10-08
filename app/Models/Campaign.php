@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Campaign extends Model
 {
-    protected $fillable = ['user_id', 'did_id', 'audio_file_id', 'name', 'status', 'max_attempts', 'requested_concurrency', 'retry_delay_seconds', 'scheduled_at', 'submitted_at', 'approved_at', 'started_at', 'completed_at', 'rejection_reason'];
+    protected $fillable = ['user_id', 'did_id', 'audio_file_id', 'name', 'status', 'max_attempts', 'requested_concurrency', 'retry_delay_seconds', 'scheduled_at', 'submitted_at', 'approved_at', 'started_at', 'completed_at', 'rejection_reason', 'blocked_reason'];
 
     protected function casts(): array
     {
@@ -52,6 +52,6 @@ class Campaign extends Model
 
     public function scopeVisibleTo($q, User $user)
     {
-        return $user->isSuperAdmin() ? $q : $q->where('campaigns.user_id', $user->id);
+        return $user->limitToVisibleOwners($q, 'campaigns.user_id');
     }
 }

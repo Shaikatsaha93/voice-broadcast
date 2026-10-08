@@ -14,9 +14,18 @@ class AudioController extends Controller
 {
     public function index(Request $request)
     {
-        $audios = AudioFile::when(! $request->user()->isSuperAdmin(), fn ($q) => $q->where('user_id', $request->user()->id))->latest('id')->paginate(20);
+        $audios = $request->user()->limitToVisibleOwners(AudioFile::query(), 'audio_files.user_id')->with('user:id,name')->latest('id')->paginate(20);
 
         return view('audio.index', compact('audios'));
+    }
+
+    /** Light JSON poll for the audio page: status of the (visible) files being processed. */
+    public function status(Request $request)
+    {
+        $ids = collect(explode(',', (string) $request->query('ids')))->filter(fn ($v) => ctype_digit($v))->map(fn ($v) => (int) $v)->take(50)->all();
+        $rows = $request->user()->limitToVisibleOwners(AudioFile::query(), 'audio_files.user_id')->whereIn('audio_files.id', $ids)->get(['id', 'status']);
+
+        return response()->json($rows->pluck('status', 'id'));
     }
 
     public function store(UploadAudioRequest $request)
@@ -44,6 +53,7 @@ class AudioController extends Controller
             return back()->withErrors(['audio' => 'Audio is locked: a campaign using it was already submitted.']);
         }
         $file = $request->file('audio');
+        app(\App\Services\Audio\AsteriskAudio::class)->forget($audio);
         Storage::delete(array_filter([$audio->path, $audio->normalized_path]));
         $audio->update([
             'original_name' => mb_substr($file->getClientOriginalName(), 0, 200),
@@ -54,6 +64,21 @@ class AudioController extends Controller
         ProcessAudioFile::dispatch($audio->id);
 
         return back()->with('status', 'Audio replaced; processing.');
+    }
+
+    public function destroy(AudioFile $audio)
+    {
+        Gate::authorize('delete', $audio);
+        $using = \App\Models\Campaign::where('audio_file_id', $audio->id)->count();
+        if ($using > 0) {
+            return back()->withErrors(['audio' => "Cannot delete \"{$audio->original_name}\": it is used by {$using} campaign(s). Delete those campaigns first."]);
+        }
+        app(\App\Services\Audio\AsteriskAudio::class)->forget($audio);
+        Storage::delete(array_filter([$audio->path, $audio->normalized_path]));
+        Audit::log('audio.deleted', $audio, null, null, $audio->only('original_name'));
+        $audio->delete();
+
+        return back()->with('status', 'Audio deleted.');
     }
 
     /** Authorized streaming only - files are never publicly reachable. */

@@ -8,6 +8,7 @@ use App\Jobs\DispatchCampaignCalls;
 use App\Jobs\FinalizeCampaign;
 use App\Models\CallAttempt;
 use App\Models\CampaignRecipient;
+use App\Services\Did\DidBilling;
 use App\Services\Did\DidSlotManager;
 use Illuminate\Support\Facades\DB;
 
@@ -51,6 +52,7 @@ class CallLifecycle
 
             $a->fill($extra + ['status' => $outcome, 'status_rank' => $outcome->rank(), 'finalized' => true, 'ended_at' => $a->ended_at ?? now()])->save();
             $this->slots->release($a);
+            app(DidBilling::class)->charge($a); // answered calls cost pulses x rate; balance + ledger updated here
 
             $r = CampaignRecipient::whereKey($a->recipient_id)->lockForUpdate()->first();
             $campaign = $a->campaign()->first();
@@ -59,7 +61,7 @@ class CallLifecycle
                 $r->update(['status' => 'ANSWERED', 'final_result' => 'ANSWERED']);
             } elseif ($outcome === CallStatus::CANCELLED) {
                 $r->update(['status' => 'CANCELLED', 'final_result' => 'CANCELLED']);
-            } elseif ($outcome->isRetryable() && $r->attempts_count < $campaign->max_attempts) {
+            } elseif ($outcome->isRetryable() && ($r->attempts_count - $r->retry_base) < $campaign->max_attempts) {
                 $retryAt = now()->addSeconds($campaign->retry_delay_seconds);
                 $r->update(['status' => 'RETRY_PENDING', 'next_attempt_at' => $retryAt, 'final_result' => $outcome->value]);
             } elseif ($outcome->isRetryable()) {

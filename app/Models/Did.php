@@ -8,7 +8,48 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Did extends Model
 {
-    protected $fillable = ['number', 'label', 'status', 'max_concurrent_calls', 'trunk'];
+    protected $fillable = ['number', 'label', 'status', 'max_concurrent_calls', 'balance', 'rate_per_pulse', 'pulse_seconds', 'trunk', 'created_by', 'sip_host', 'sip_port', 'sip_username', 'sip_password', 'sip_status', 'sip_status_detail', 'sip_checked_at'];
+
+    protected $hidden = ['sip_password'];
+
+    protected function casts(): array
+    {
+        return ['sip_password' => 'encrypted', 'sip_checked_at' => 'datetime'];
+    }
+
+    /** Super Admin sees every DID; an Admin only the DIDs they created. */
+    public function scopeVisibleTo($q, User $user)
+    {
+        return match (true) {
+            $user->isSuperAdmin() => $q,
+            $user->isAdmin() => $q->where('dids.created_by', $user->id),
+            default => $q->whereRaw('1 = 0'),
+        };
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(DidTransaction::class);
+    }
+
+    /** True when the balance covers one more pulse on top of the calls already in flight (rate 0 = never blocked). */
+    public function canAffordAnotherCall(int $inFlight = 0): bool
+    {
+        $rate = (float) $this->rate_per_pulse;
+
+        return $rate <= 0 || (float) $this->balance + 1e-9 >= $rate * ($inFlight + 1);
+    }
+
+    public function hasSip(): bool
+    {
+        return filled($this->sip_host) && filled($this->sip_username);
+    }
+
+    /** Name of the PJSIP endpoint / registration objects generated for this DID. */
+    public function sipName(): string
+    {
+        return 'sip-'.$this->id;
+    }
 
     public function users(): BelongsToMany
     {

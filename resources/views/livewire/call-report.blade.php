@@ -15,17 +15,17 @@
             </div>
 
             @if($dateMode === 'single')
-                <label class="flex items-center gap-2 text-sm"><span class="text-base-content/75">On</span>
-                    <input wire:model="date" type="date" max="{{ now()->toDateString() }}" class="input input-sm"></label>
+                <label class="flex items-center gap-2 text-sm whitespace-nowrap"><span class="text-base-content/75">On</span>
+                    <input wire:model="date" type="date" max="{{ now()->toDateString() }}" class="input input-sm w-40 min-w-[10rem] pr-2"></label>
                 <div class="flex gap-1">
                     <button type="button" x-on:click="$wire.date = '{{ now()->toDateString() }}'" class="btn btn-ghost btn-xs">Today</button>
                     <button type="button" x-on:click="$wire.date = '{{ now()->subDay()->toDateString() }}'" class="btn btn-ghost btn-xs">Yesterday</button>
                 </div>
             @else
-                <label class="flex items-center gap-2 text-sm"><span class="text-base-content/75">From</span>
-                    <input wire:model="from" type="date" max="{{ now()->toDateString() }}" class="input input-sm"></label>
-                <label class="flex items-center gap-2 text-sm"><span class="text-base-content/75">To</span>
-                    <input wire:model="to" type="date" max="{{ now()->toDateString() }}" class="input input-sm"></label>
+                <label class="flex items-center gap-2 text-sm whitespace-nowrap"><span class="text-base-content/75">From</span>
+                    <input wire:model="from" type="date" max="{{ now()->toDateString() }}" class="input input-sm w-40 min-w-[10rem] pr-2"></label>
+                <label class="flex items-center gap-2 text-sm whitespace-nowrap"><span class="text-base-content/75">To</span>
+                    <input wire:model="to" type="date" max="{{ now()->toDateString() }}" class="input input-sm w-40 min-w-[10rem] pr-2"></label>
                 <div class="flex gap-1">
                     <button type="button" x-on:click="$wire.to = '{{ now()->toDateString() }}'; $wire.from = '{{ now()->subDays(6)->toDateString() }}'" class="btn btn-ghost btn-xs">Last 7 days</button>
                     <button type="button" x-on:click="$wire.to = '{{ now()->toDateString() }}'; $wire.from = '{{ now()->subDays(29)->toDateString() }}'" class="btn btn-ghost btn-xs">Last 30 days</button>
@@ -42,8 +42,8 @@
         </div>
     </div></form>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
-        @foreach(['Attempts' => $summary->total, 'Answered' => $summary->answered, 'No Answer' => $summary->no_answer, 'Busy' => $summary->busy, 'Failed' => $summary->failed, 'Duration (s)' => $summary->duration, 'Billsec' => $summary->billsec] as $l => $v)
-            @php $tone = ['indigo', 'emerald', 'amber', 'sky', 'pink', 'indigo', 'emerald'][$loop->index]; @endphp
+        @foreach(['Attempts' => $summary->total, 'Answered' => $summary->answered, 'No Answer' => $summary->no_answer, 'Busy' => $summary->busy, 'Failed' => $summary->failed, 'Duration (s)' => $summary->duration, 'Billsec' => $summary->billsec, 'Cost' => \App\Support\Money::tk($summary->cost)] as $l => $v)
+            @php $tone = ['indigo', 'emerald', 'amber', 'sky', 'pink', 'indigo', 'emerald', 'amber'][$loop->index % 8]; @endphp
             <div class="vb-stat vb-{{ $tone }} !p-4"><div class="label !text-xs">{{ $l }}</div><div class="value !text-2xl">{{ $v ?? 0 }}</div></div>
         @endforeach
     </div>
@@ -55,10 +55,11 @@
         </button>
     </div>
     <div class="vb-card overflow-x-auto p-2">
-        <table class="vb-table table-sm">
-            <thead><tr><th>Time</th><th>Campaign</th><th>DID</th><th>Phone</th><th>Attempt</th><th>Status</th><th>Duration</th><th>Billsec</th></tr></thead>
-            <tbody>@forelse($attempts as $a)<tr><td class="whitespace-nowrap">{{ $a->created_at }}</td><td>{{ $a->campaign->name }}</td><td>{{ $a->did->number }}</td><td>{{ $a->phone }}</td><td>#{{ $a->attempt_no }}</td><td><x-status :value="$a->status->value" /></td><td>{{ $a->duration }}</td><td>{{ $a->billsec }}</td></tr>
-            @empty<tr><td colspan="8" class="py-6 text-center text-base-content/75">No calls.</td></tr>@endforelse</tbody>
+        <table class="vb-table table-sm w-full min-w-[56rem] table-fixed">
+            <colgroup><col class="w-[11rem]"><col><col class="w-[9rem]"><col class="w-[10rem]"><col class="w-[6rem]"><col class="w-[11rem]"><col class="w-[6.5rem]"><col class="w-[6.5rem]"><col class="w-[6.5rem]"></colgroup>
+            <thead><tr><th class="text-left">Time</th><th class="text-left">Campaign</th><th class="text-left">DID</th><th class="text-left">Phone</th><th class="text-center">Attempt</th><th class="text-center">Status</th><th class="text-right">Duration</th><th class="text-right">Billsec</th><th class="text-right">Cost</th></tr></thead>
+            <tbody>@forelse($attempts as $a)<tr class="align-middle"><td class="whitespace-nowrap tabular-nums">{{ $a->created_at }}</td><td class="truncate" title="{{ $a->campaign->name }}">{{ $a->campaign->name }}</td><td class="tabular-nums">{{ $a->did->number }}</td><td class="tabular-nums">{{ $a->phone }}</td><td class="text-center">#{{ $a->attempt_no }}</td><td class="text-center"><x-status :value="$a->status->value" /></td><td class="text-right tabular-nums">{{ $a->duration }}</td><td class="text-right tabular-nums">{{ $a->billsec }}</td><td class="text-right tabular-nums">{{ $a->cost > 0 ? \App\Support\Money::tk($a->cost) : '-' }}</td></tr>
+            @empty<tr><td colspan="9" class="py-6 text-center text-base-content/75">No calls.</td></tr>@endforelse</tbody>
         </table>
     </div>
     {{ $attempts->links() }}

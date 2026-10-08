@@ -8,7 +8,7 @@ class RejectCampaignRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin();
+        return $this->user()->can('approve', $this->route('campaign'));
     }
 
     public function rules(): array

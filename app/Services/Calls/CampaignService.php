@@ -122,6 +122,106 @@ class CampaignService
         return $c;
     }
 
+    /** Statuses a recipient can be retried from, as offered in the UI. */
+    public const RETRY_SECTIONS = ['ANSWERED', 'NO_ANSWER', 'BUSY', 'FAILED', 'CANCELLED'];
+
+    /** Restrict a recipients query to one result card: Answered / No answer / Busy / Failed / Cancelled. */
+    public static function sectionScope($q, string $key)
+    {
+        if ($key === 'CANCELLED') {
+            return $q->where('status', 'CANCELLED');
+        }
+        // A number belongs to a section when any of its finished calls had that result (same as the call report),
+        // as long as it is not being called right now.
+        $calls = \App\Models\CallAttempt::query()->select('recipient_id')->where('finalized', true)->where(fn ($w) => match ($key) {
+            'ANSWERED' => $w->whereNotNull('answered_at'),
+            'NO_ANSWER' => $w->whereNull('answered_at')->where('status', 'NO_ANSWER'),
+            'BUSY' => $w->whereNull('answered_at')->where('status', 'BUSY'),
+            'FAILED' => $w->whereNull('answered_at')->whereIn('status', ['FAILED', 'TEMPORARY_FAILURE', 'INVALID_NUMBER']),
+        });
+
+        return $q->whereNotIn('status', ['PENDING', 'IN_PROGRESS'])->whereIn('id', $calls);
+    }
+
+    /**
+     * Calls (attempts) per result, the same numbers the call report shows:
+     * answered / no answer / busy / failed, plus numbers cancelled before dialing.
+     */
+    public function callCounts(Campaign $c): array
+    {
+        $r = $c->attempts()->where('finalized', true)->selectRaw(
+            "coalesce(sum(answered_at is not null),0) answered,
+             coalesce(sum(answered_at is null and status = 'NO_ANSWER'),0) no_answer,
+             coalesce(sum(answered_at is null and status = 'BUSY'),0) busy,
+             coalesce(sum(answered_at is null and status in ('FAILED','TEMPORARY_FAILURE','INVALID_NUMBER')),0) failed"
+        )->first();
+
+        return [
+            'ANSWERED' => (int) $r->answered, 'NO_ANSWER' => (int) $r->no_answer, 'BUSY' => (int) $r->busy, 'FAILED' => (int) $r->failed,
+            'CANCELLED' => self::sectionScope($c->recipients()->getQuery(), 'CANCELLED')->count(),
+        ];
+    }
+
+    /** Numbers whose last result was this one but that still have an automatic retry coming. */
+    public function waitingCounts(Campaign $c): array
+    {
+        $out = ['ANSWERED' => 0, 'NO_ANSWER' => 0, 'BUSY' => 0, 'FAILED' => 0, 'CANCELLED' => 0];
+        foreach ($c->recipients()->where('status', 'RETRY_PENDING')->selectRaw('final_result, count(*) c')->groupBy('final_result')->pluck('c', 'final_result') as $result => $n) {
+            $out[match ($result) { 'NO_ANSWER' => 'NO_ANSWER', 'BUSY' => 'BUSY', default => 'FAILED' }] += (int) $n;
+        }
+
+        return $out;
+    }
+
+    /** How many numbers had a call with each result and can be retried now. */
+    public function outcomeCounts(Campaign $c): array
+    {
+        $out = [];
+        foreach (self::RETRY_SECTIONS as $key) {
+            $out[$key] = self::sectionScope($c->recipients()->getQuery(), $key)->count();
+        }
+
+        return $out;
+    }
+
+    /**
+     * Put finished recipients back in the queue. $sections is a list of RETRY_SECTIONS (or 'all').
+     * A COMPLETED or CANCELLED campaign goes back to RUNNING; a PAUSED one waits for resume.
+     * Returns the number of recipients re-queued.
+     */
+    public function retry(Campaign $c, array|string $sections): int
+    {
+        if (! in_array($c->status, [CampaignStatus::COMPLETED, CampaignStatus::CANCELLED, CampaignStatus::RUNNING, CampaignStatus::PAUSED], true)) {
+            throw ValidationException::withMessages(['section' => 'Only completed, cancelled, running or paused campaigns can be retried.']);
+        }
+        $statuses = $sections === 'all' ? self::RETRY_SECTIONS : array_values(array_unique((array) $sections));
+        if (! $statuses || array_diff($statuses, self::RETRY_SECTIONS)) {
+            throw ValidationException::withMessages(['section' => 'Select at least one valid call section.']);
+        }
+
+        $count = $c->recipients()->where(function ($q) use ($statuses) {
+            foreach ($statuses as $key) {
+                $q->orWhere(fn ($w) => self::sectionScope($w, $key));
+            }
+        })->update([
+            'status' => 'PENDING', 'final_result' => null, 'next_attempt_at' => null, 'retry_base' => DB::raw('attempts_count'),
+        ]);
+        if ($count === 0) {
+            throw ValidationException::withMessages(['section' => 'No calls in that section to retry.']);
+        }
+
+        Audit::log('campaign.retry', $c, null, null, ['sections' => $statuses, 'recipients' => $count]);
+
+        if (in_array($c->status, [CampaignStatus::COMPLETED, CampaignStatus::CANCELLED], true)) {
+            $c = $this->transition($c, CampaignStatus::RUNNING, ['completed_at' => null], 'campaign.reopened');
+        }
+        if ($c->status === CampaignStatus::RUNNING) {
+            DispatchCampaignCalls::dispatch($c->id);
+        }
+
+        return $count;
+    }
+
     private function abortQueuedAttempts(Campaign $c, bool $cancelled): void
     {
         $life = app(CallLifecycle::class);
