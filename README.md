@@ -42,7 +42,7 @@ No Asterisk credential is hardcoded; everything comes from `.env`.
 | Role | Can do |
 |---|---|
 | **Super Admin** | everything: create Admins and Users, register any DID, approve any campaign, run campaigns, see all activity and the **Audit** log (Super Admin only) |
-| **Admin** | create **normal users only**; register DIDs; approve campaigns of their own users; run their own campaigns; see only their own users' activity, campaigns, audio, reports and DIDs. Two admins never see each other's data. No Audit access |
+| **Admin** | create **users only**; register DIDs; approve campaigns of their own users; run their own campaigns; see only their own users' activity, campaigns, audio, reports and DIDs. Two admins never see each other's data. No Audit access |
 | **User** | create and run own campaigns on the DIDs assigned to them, upload audio, see own reports and DID balance |
 
 Admins and Super Admins can do everything a User can (create, edit, submit, start, pause, resume, cancel, delete and retry campaigns) for their own campaigns and, for an Admin, their users' campaigns. Only Admin / Super Admin see the **Delete** button for audio. Ownership is stored in `users.created_by` and `dids.created_by`.
@@ -85,7 +85,7 @@ exten => s,1,NoOp(${CALL_REF})
 
 ## Business rules and decisions
 * **DID assignment**: many-to-many table `did_user`. With `DID_SHARED_ASSIGNMENT=false` (default) assigning a DID that already has a user is rejected (enforced under a row lock).
-* **Approval does not dial.** Flow: user creates DRAFT → imports numbers → submits (`PENDING_APPROVAL`) → Super Admin, or the Admin of that user, approves (`APPROVED`) → the owner/admin presses **Start** (`RUNNING`, or `QUEUED` when `scheduled_at` is in the future; the scheduler starts it when due). Nothing calls automatically after creation or approval.
+* **Approval does not dial.** Flow: user creates DRAFT → imports numbers → submits (`PENDING_APPROVAL`) → Super Admin, or the Admin of that user, approves (`APPROVED`) → approval **starts it automatically** (`RUNNING`, or `QUEUED` when `scheduled_at` is in the future; the scheduler starts it when due). The user does not press Start again. Nothing calls before approval.
 * **Retry convention**: `max_attempts` = maximum *total* attempts (3 → attempts 1,2,3). Automatically retried: NO_ANSWER, BUSY, TEMPORARY_FAILURE. Not retried: answered, INVALID_NUMBER, CANCELLED. A per-campaign `retry_delay_seconds` is applied.
 * **Manual retry** (campaign page, COMPLETED / CANCELLED / RUNNING / PAUSED): *Call results* cards **Answered / No answer / Busy / Failed (/ Cancelled)** show the number of calls, the same numbers as the call report. Select one or more cards (or *Select all*) and press **Retry**: every number that had a call with that result is queued again with a fresh attempt budget (`retry_base`). A completed or cancelled campaign goes back to RUNNING.
 * "Answered" in reports = attempt has `answered_at`; its terminal status is `COMPLETED`.

@@ -12,7 +12,7 @@ class DatabaseSeeder extends Seeder
     {
         $admin = Role::firstOrCreate(['name' => Role::SUPER_ADMIN], ['label' => 'Super Admin']);
         $manager = Role::firstOrCreate(['name' => Role::ADMIN], ['label' => 'Admin']);
-        $user = Role::firstOrCreate(['name' => Role::USER], ['label' => 'Normal User']);
+        $user = Role::updateOrCreate(['name' => Role::USER], ['label' => 'User']);
 
         $all = ['users.manage', 'dids.manage', 'campaigns.approve', 'campaigns.view_all', 'reports.view_all', 'audit.view'];
         $own = ['campaigns.manage_own', 'audio.manage_own', 'reports.view_own'];

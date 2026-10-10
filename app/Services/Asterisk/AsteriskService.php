@@ -37,7 +37,7 @@ class AsteriskService
         $audio = app(AsteriskAudio::class)->playPath($campaign->audio);
 
         return $this->ami->originate([
-            'Channel' => str_replace('{number}', $attempt->phone, $did->trunk ?: config('broadcast.asterisk.trunk')),
+            'Channel' => str_replace('{number}', $this->dialNumber($attempt->phone), $did->trunk ?: config('broadcast.asterisk.trunk')),
             'Context' => config('broadcast.asterisk.context'),
             'Exten' => 's',
             'Priority' => 1,
@@ -47,6 +47,12 @@ class AsteriskService
             'Async' => 'true',
             'Variable' => ['CALL_REF='.$attempt->call_ref, 'AUDIO_FILE='.$audio],
         ]);
+    }
+
+    /** Number as it is dialed on the trunk: the leading 88 of 880XXXXXXXXXX is dropped (8801624374389 -> 01624374389). */
+    private function dialNumber(string $phone): string
+    {
+        return preg_replace('/^88(?=0)/', '', $phone);
     }
 
     /** @return array<string>|null call_refs / uniqueids of live channels, null when Asterisk is unreachable. */

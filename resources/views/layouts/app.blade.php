@@ -131,7 +131,7 @@
             @endauth
         </div>
         <div class="mt-6 border-t border-base-300 pt-4 text-center text-xs text-base-content/65 sm:text-left">
-            &copy; {{ now()->year }} {{ config('app.name') }}. All rights reserved.
+            &copy; {{ now()->year }} {{ config('app.name') }}. All rights reserved. Developed by <span class="font-semibold">Shaikat</span>.
         </div>
     </div>
 </footer>

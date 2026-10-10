@@ -29,7 +29,9 @@ class ApprovalController extends Controller
         Gate::authorize('approve', $campaign);
         $this->service->approve($campaign, $request->user());
 
-        return redirect()->route('admin.approvals')->with('status', 'Campaign approved. The owner can now start it.');
+        $campaign->refresh();
+
+        return redirect()->route('admin.approvals')->with('status', $campaign->status->value === 'QUEUED' ? 'Campaign approved. It starts automatically at its scheduled time.' : 'Campaign approved and started.');
     }
 
     public function reject(RejectCampaignRequest $request, Campaign $campaign)

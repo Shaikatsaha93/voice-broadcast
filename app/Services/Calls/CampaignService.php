@@ -64,7 +64,8 @@ class CampaignService
         $c = $this->transition($c, CampaignStatus::APPROVED, ['approved_at' => now()], 'campaign.approved');
         CampaignApproval::create(['campaign_id' => $c->id, 'admin_id' => $admin->id, 'decision' => 'APPROVED']);
 
-        return $c;
+        // Approval starts the campaign by itself: right away, or QUEUED until its scheduled time.
+        return $this->start($c);
     }
 
     public function reject(Campaign $c, User $admin, string $reason): Campaign
@@ -76,7 +77,7 @@ class CampaignService
         return $c;
     }
 
-    /** Start an APPROVED campaign. Future scheduled_at => QUEUED until the scheduler starts it. */
+    /** Start an APPROVED campaign (done automatically on approval). Future scheduled_at => QUEUED until the scheduler starts it. */
     public function start(Campaign $c): Campaign
     {
         if ($c->scheduled_at && $c->scheduled_at->isFuture()) {
