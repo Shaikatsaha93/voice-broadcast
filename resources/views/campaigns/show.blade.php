@@ -6,6 +6,9 @@
 @if($campaign->status->value === 'RUNNING' && $campaign->blocked_reason === 'INSUFFICIENT_BALANCE')
 <div role="alert" class="alert alert-warning alert-soft my-4"><i class="bi bi-wallet2"></i><span>Waiting: the DID <b>{{ $campaign->did->number }}</b> does not have enough balance for another call (balance {{ \App\Support\Money::tk($campaign->did->balance) }}). No calls are generated until it is topped up; the campaign then continues by itself.</span></div>
 @endif
+@if($campaign->status->value === 'RUNNING' && $campaign->blocked_reason === 'ADMIN_BALANCE')
+<div role="alert" class="alert alert-warning alert-soft my-4"><i class="bi bi-wallet2"></i><span>Waiting: the balance of the Admin account that pays for these calls is too low for another call. No calls are generated until it is topped up; the campaign then continues by itself.</span></div>
+@endif
 @if($campaign->status->value === 'RUNNING' && $campaign->blocked_reason === 'DID_EXPIRED')
 <div role="alert" class="alert alert-warning alert-soft my-4"><i class="bi bi-calendar-x"></i><span>Waiting: the validity of DID <b>{{ $campaign->did->number }}</b> ended on {{ $campaign->did->valid_until?->format('Y-m-d') }}. No calls are generated until the validity date is extended; the campaign then continues by itself.</span></div>
 @endif

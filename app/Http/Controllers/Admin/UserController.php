@@ -36,14 +36,25 @@ class UserController extends Controller
     public function store(StoreUserRequest $request)
     {
         $user = DB::transaction(function () use ($request) {
-            $user = User::create($request->safe()->only(['name', 'email', 'password', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null, 'created_by' => $this->ownerId($request)]);
+            $user = User::create($request->safe()->only(['name', 'email', 'password', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null, 'created_by' => $this->ownerId($request)] + $this->wallet($request, true));
             $user->roles()->sync([Role::where('name', $request->role)->value('id')]);
+            app(\App\Services\UserBalance::class)->recordOpening($user, $request->user()->id);
             Audit::log('user.created', $user, null, null, $user->only('name', 'email', 'status') + ['role' => $request->role]);
 
             return $user;
         });
 
         return redirect()->route('admin.users.show', $user)->with('status', 'User created.');
+    }
+
+    /** Admin accounts carry a call charge and a balance; every other role has none. */
+    private function wallet(Request $request, bool $creating): array
+    {
+        if ($request->role !== Role::ADMIN) {
+            return ['rate_per_pulse' => null, 'pulse_seconds' => null] + ($creating ? ['balance' => null] : []);
+        }
+
+        return ['rate_per_pulse' => $request->rate_per_pulse, 'pulse_seconds' => $request->pulse_seconds] + ($creating ? ['balance' => (float) $request->balance] : []);
     }
 
     /** Admins the viewer can put a user under: all for the System Admin, those in their own tree for a Super Admin. */
@@ -76,7 +87,29 @@ class UserController extends Controller
     {
         Gate::authorize('manage', $user);
 
-        return view('admin.users.show', ['user' => $user->load('roles', 'dids')]);
+        $user->load('roles', 'dids');
+
+        return view('admin.users.show', ['user' => $user, 'transactions' => $user->isAdmin() ? $user->transactions()->with('author:id,name')->latest('id')->limit(25)->get() : collect()]);
+    }
+
+    /** Give an Admin account more balance, or take some back (System Admin / the Super Admin above). Every change is in the ledger + audit log. */
+    public function adjustBalance(Request $request, User $user, \App\Services\UserBalance $balance)
+    {
+        Gate::authorize('manage', $user);
+        abort_unless($user->isAdmin() && $user->id !== $request->user()->id, 403);
+        $data = $request->validate([
+            'action' => ['required', 'in:add,deduct'],
+            'amount' => ['required', 'numeric', 'gt:0', 'max:99999999'],
+            'note' => ['nullable', 'string', 'max:190'],
+        ]);
+        $add = $data['action'] === 'add';
+        $balance->adjust($user, $add ? (float) $data['amount'] : -(float) $data['amount'], $add ? 'topup' : 'deduct', $data['note'] ?? null, $request->user()->id);
+
+        if ($add) { // campaigns that were waiting for this Admin's balance start dialing right away
+            \App\Models\Campaign::where('status', 'RUNNING')->whereIn('user_id', $user->visibleOwnerIds())->pluck('id')->each(fn ($id) => \App\Jobs\DispatchCampaignCalls::dispatch($id));
+        }
+
+        return back()->with('status', ($add ? 'Balance added.' : 'Balance removed.').' New balance: '.\App\Support\Money::tk($user->balance));
     }
 
     public function edit(User $user)
@@ -95,7 +128,7 @@ class UserController extends Controller
 
         DB::transaction(function () use ($request, $user) {
             $old = $user->only('name', 'email', 'status') + ['role' => $user->roles->first()?->name];
-            $data = $request->safe()->only(['name', 'email', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null];
+            $data = $request->safe()->only(['name', 'email', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null] + $this->wallet($request, false);
             if ($request->filled('owner_admin_id')) {
                 $data['created_by'] = $this->ownerId($request); // Super Admin moves a normal user under another Admin
             }

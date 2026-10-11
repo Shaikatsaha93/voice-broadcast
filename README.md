@@ -63,6 +63,9 @@ Users upload WAV or MP3; the file is probed and normalized to 8 kHz mono WAV bef
 * **Validity date** (required): the last valid day. From the next day `dids:expire` (every minute) sets the DID **inactive**, removes it from the Asterisk trunk config and writes `did.expired` to the audit log. Campaigns on an expired DID wait (`blocked_reason = DID_EXPIRED`) until the date is extended. An expired DID cannot be activated or saved as active without a new date.
 * **Dialing**: the leading `88` of `880XXXXXXXXXX` is dropped in the dial string (`8801624374389` → `01624374389`); stored numbers and reports keep the full number.
 
+## Admin balance (two-level billing)
+A Super Admin / System Admin gives every **Admin** account a **call charge** (taka per pulse of N seconds) and a **balance** when creating it; the balance can be topped up or reduced later on the Admin's page (ledger in `user_transactions`, every change audited). When a **User** belongs to an Admin (the Admin created the User), or the Admin runs a campaign themself, every answered call is charged **twice**: the DID balance at the DID's rate, and the Admin's balance at the Admin's rate (`DidBilling::chargeAdmin`; stored in `call_attempts.admin_id / admin_pulses / admin_cost`). Before every call `DidSlotManager::acquire` checks both balances (`admin_balance` denial, campaign `blocked_reason = ADMIN_BALANCE`): when the Admin's balance is used up, no call is generated even if the DID still has balance, and the campaign continues by itself after a top-up. The **Call report** shows managers per call the user, *Charged* (what the user paid on the DID), *Admin cost* and *Profit* (Charged - Admin cost), summary cards for the same, a **Cost by user and DID** table with totals, and the same columns in the CSV export. Users created directly by a Super Admin / System Admin have no Admin to bill, and an Admin without a wallet (older accounts) is not billed.
+
 ## Account validity
 Admin and User accounts need a **Valid until** date when they are created or edited (System Admin / Super Admin accounts do not expire). `users:expire` (every minute) sets accounts whose date has passed to **inactive** (`user.expired` in the audit log); inactive users cannot log in and a live session is ended on the next request. An expired account cannot be activated without a new date.
 
@@ -125,6 +128,13 @@ Roles `system_admin` / `super_admin` / `admin` / `user` (see *Roles*; tables `ro
 
 ## Security
 CSRF, Blade escaping, Eloquent bindings, validated uploads (extension + MIME + size + ffprobe integrity, random filenames, private disk), login throttling, hashed passwords + session regeneration, secure headers (`SecurityHeaders` middleware), env-only secrets, audit log (`audit_logs`) for users, DIDs, assignments, concurrency changes and every campaign state change.
+
+## Protecting the code on the server
+After **every** deploy (rsync / git pull resets file modes) run, as root:
+```bash
+sudo bash deploy/harden.sh /var/www/broadcast
+```
+It sets the app to `www-data:www-data`, directories `750`, files `640`, `.env` `600` (no other login user can even list the folder), tightens nginx (no server version, dot files / sqlite / logs / config files denied, only `public/index.php` is executed; the app itself sends the security headers) and PHP (`expose_php=Off`, `display_errors=Off`), then reloads both. Also: keep `APP_ENV=production`, `APP_DEBUG=false`, `LOG_LEVEL=warning`, keep MariaDB / Redis / Asterisk AMI+ARI bound to `127.0.0.1`, use SSH keys only (`PasswordAuthentication no`, `PermitRootLogin no`) and a firewall (only 22/80/443), and serve the site over HTTPS with `SESSION_SECURE_COOKIE=true`. Nothing can hide the code from `root` / users with `sudo`, so give those out sparingly.
 
 ## Production deployment (Ubuntu 22.04/24.04)
 ```bash

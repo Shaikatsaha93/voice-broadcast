@@ -5,6 +5,7 @@ namespace App\Services\Did;
 use App\Models\CallAttempt;
 use App\Models\Did;
 use App\Models\DidSlot;
+use App\Models\User;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  */
 class DidSlotManager
 {
-    /** Why the last acquire() said no: 'capacity' | 'balance' | 'inactive' | null (granted). */
+    /** Why the last acquire() said no: 'capacity' | 'balance' | 'admin_balance' | 'expired' | 'inactive' | null (granted). */
     public ?string $lastDenial = null;
 
     public function acquire(CallAttempt $attempt): bool
@@ -77,6 +78,18 @@ class DidSlotManager
                     $this->lastDenial = 'balance';
 
                     return false;
+                }
+
+                // The Admin this caller belongs to must have balance too (at the rate the Super Admin gave that Admin).
+                $admin = $campaign->user?->billingAdmin();
+                if ($admin) {
+                    $adminRow = User::whereKey($admin->id)->lockForUpdate()->first();
+                    $adminInFlight = DidSlot::whereIn('call_attempt_id', CallAttempt::whereIn('user_id', $adminRow->visibleOwnerIds())->select('id'))->count();
+                    if (! $adminRow->canAffordAnotherCall($adminInFlight)) {
+                        $this->lastDenial = 'admin_balance';
+
+                        return false;
+                    }
                 }
 
                 DidSlot::create([

@@ -11,6 +11,21 @@
             <label class="block"><span class="mb-1 block text-sm">Role</span><select name="role" class="select w-full">@foreach(array_intersect_key(['user' => 'User', 'admin' => 'Admin', 'super_admin' => 'Super Admin', 'system_admin' => 'System Admin'], array_flip(auth()->user()->assignableRoles())) as $v => $l)<option value="{{ $v }}" @selected(old('role', $user->exists ? $user->roles->first()?->name : 'user') === $v)>{{ $l }}</option>@endforeach</select></label>
             <label class="block"><span class="mb-1 block text-sm">Status</span><select name="status" class="select w-full">@foreach(['active', 'inactive'] as $s)<option @selected(old('status', $user->status) === $s)>{{ $s }}</option>@endforeach</select></label>
         </div>
+        <div id="wallet-box" class="rounded-box border border-base-300 bg-base-200/40 p-4 hidden">
+            <p class="mb-2 text-sm font-semibold">Call charge and balance <span class="text-xs font-normal text-base-content/65">(required for an Admin)</span></p>
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
+                <span>Charge</span>
+                <label class="input input-sm flex w-36 items-center gap-1"><span class="font-semibold text-base-content/70">{{ config('broadcast.currency', '৳') }}</span><input name="rate_per_pulse" type="number" step="0.0001" min="0" required value="{{ old('rate_per_pulse', $user->rate_per_pulse) }}" class="grow"></label>
+                <span>taka for every</span>
+                <label class="input input-sm flex w-32 items-center gap-1"><input name="pulse_seconds" type="number" min="1" max="3600" required value="{{ old('pulse_seconds', $user->pulse_seconds ?? 60) }}" class="grow"><span class="text-base-content/70">sec</span></label>
+                <span>(1 pulse).</span>
+            </div>
+            @unless($user->exists)
+                <label class="mt-3 block"><span class="mb-1 block text-sm">Balance</span><label class="input flex w-full items-center gap-1"><span class="font-semibold text-base-content/70">{{ config('broadcast.currency', '৳') }}</span><input name="balance" type="number" step="0.0001" min="0" required value="{{ old('balance') }}" class="grow" placeholder="Balance given to this Admin"></label></label>
+            @else
+                <p class="mt-3 text-sm">Balance: <b>{{ \App\Support\Money::tk($user->balance ?? 0) }}</b> <span class="text-xs text-base-content/65">- add or remove balance on the user's page.</span></p>
+            @endunless
+        </div>
         <div id="validity-box" class="block">
             <label class="block"><span class="mb-1 block text-sm">Valid until <span class="text-xs text-base-content/65">(the account becomes inactive after this date)</span></span><input name="valid_until" type="date" required value="{{ old('valid_until', $user->valid_until?->toDateString()) }}" class="input w-full"></label>
         </div>
@@ -19,6 +34,9 @@
             const role = document.querySelector('[name=role]'), box = document.getElementById('validity-box'), input = box.querySelector('input');
             const sync = () => { const need = ['user', 'admin'].includes(role.value); box.classList.toggle('hidden', ! need); input.disabled = ! need; };
             role.addEventListener('change', sync); sync();
+            const wallet = document.getElementById('wallet-box');
+            const syncWallet = () => { const on = role.value === 'admin'; wallet.classList.toggle('hidden', ! on); wallet.querySelectorAll('input').forEach(i => i.disabled = ! on); };
+            role.addEventListener('change', syncWallet); syncWallet();
         })();
         </script>
         @if(! auth()->user()->isAdmin() && ($admins ?? collect())->isNotEmpty())

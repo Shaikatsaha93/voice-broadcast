@@ -44,7 +44,7 @@
             </div>
         </div>
         @unless($did->exists)
-            <label class="block"><span class="mb-1 block text-sm">Opening balance</span><label class="input flex items-center gap-1"><span class="font-semibold text-base-content/70">{{ config('broadcast.currency', '৳') }}</span><input name="opening_balance" type="number" step="0.0001" min="0" value="{{ old('opening_balance', 0) }}" class="grow"></label></label>
+            <label class="mt-3 block"><span class="mb-1 block text-sm">Opening balance</span><label class="input flex w-full items-center gap-1"><span class="font-semibold text-base-content/70">{{ config('broadcast.currency', '৳') }}</span><input name="opening_balance" type="number" step="0.0001" min="0" value="{{ old('opening_balance', 0) }}" class="grow"></label></label>
         @else
             <p class="text-xs text-base-content/70">To add or remove balance, use the Balance section on the DID page.</p>
         @endunless

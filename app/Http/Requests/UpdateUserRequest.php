@@ -22,6 +22,10 @@ class UpdateUserRequest extends FormRequest
             'password' => ['nullable', Password::min(12)],
             'role' => ['required', Rule::in($this->user()->assignableRoles())],
             'status' => ['required', Rule::in(['active', 'inactive'])],
+            // Admin accounts: call charge (taka per pulse of N seconds) is required; the opening balance is required when the account is created.
+            'rate_per_pulse' => [Rule::requiredIf(fn () => $this->input('role') === \App\Models\Role::ADMIN), 'nullable', 'numeric', 'min:0', 'max:99999'],
+            'pulse_seconds' => [Rule::requiredIf(fn () => $this->input('role') === \App\Models\Role::ADMIN), 'nullable', 'integer', 'between:1,3600'],
+            'balance' => ['prohibited'],
             // Admin / User accounts: validity date is required; a new date cannot be in the past.
             'valid_until' => [Rule::requiredIf(fn () => \App\Models\User::roleNeedsValidity($this->input('role'))), 'nullable', 'date', fn ($a, $v, $fail) => $this->validityOk($v) ?: $fail('The validity date cannot be in the past.')],
             // Super Admin only: put a normal user under a specific Admin.

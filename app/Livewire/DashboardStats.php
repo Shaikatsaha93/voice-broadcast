@@ -47,6 +47,14 @@ class DashboardStats extends Component
             : ['Assigned DIDs' => $dids->count(), 'DID balance' => $balance, 'My campaigns' => (clone $campaigns)->count(), 'Pending approval' => (clone $campaigns)->where('status', 'PENDING_APPROVAL')->count(),
                 'Running' => (clone $campaigns)->where('status', 'RUNNING')->count(), 'Completed' => (clone $campaigns)->where('status', 'COMPLETED')->count()];
 
+        // An Admin sees the balance and call charge their Super Admin gave them (it pays for their users' calls).
+        if ($user->isAdmin()) {
+            unset($cards['Pending campaigns']); // an Admin cannot approve, so it is not shown
+        }
+        if ($user->isAdmin() && $user->hasWallet()) {
+            $cards = ['My balance' => Money::tk($user->balance ?? 0), 'Call charge' => Money::tk($user->rate_per_pulse).' / '.(int) $user->pulse_seconds.' sec'] + $cards;
+        }
+
         return view('livewire.dashboard-stats', compact('cards', 'today', 'dids'));
     }
 }

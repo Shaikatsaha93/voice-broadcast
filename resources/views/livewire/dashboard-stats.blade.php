@@ -1,5 +1,5 @@
 <div wire:poll.5s class="space-y-6">
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4">
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 {{ count($cards) % 4 === 0 ? 'lg:grid-cols-4' : 'lg:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]' }}" style="--n: {{ count($cards) }}">
         @foreach($cards as $label => $value)
             @php $tone = ['indigo', 'pink', 'sky', 'emerald', 'amber'][$loop->index % 5]; @endphp
             <div class="vb-stat vb-{{ $tone }}"><div class="label">{{ $label }}</div><div class="value">{{ $value }}</div></div>

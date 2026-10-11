@@ -42,7 +42,7 @@ class CallReport extends Component
     /** Same scoping + filters for the table, the summary and the CSV export. */
     private function filteredQuery()
     {
-        return CallAttempt::visibleTo(Auth::user())->with('campaign:id,name', 'did:id,number')
+        return CallAttempt::visibleTo(Auth::user())->with('campaign:id,name', 'did:id,number', 'user:id,name')
             ->when($this->campaignId, fn ($q, $v) => $q->where('campaign_id', $v))
             ->when($this->didId, fn ($q, $v) => $q->where('did_id', $v))
             ->when($this->status !== '', fn ($q) => $q->whereIn('status', self::STATUS_FILTERS[$this->status] ?? [$this->status]))
@@ -92,15 +92,17 @@ class CallReport extends Component
 
         $file = 'call-report-'.now()->format('Ymd-His').'.csv';
 
-        return response()->streamDownload(function () use ($query) {
+        $manager = $user->isManager();
+
+        return response()->streamDownload(function () use ($query, $manager) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel reads names correctly
-            fputcsv($out, ['Time', 'Campaign', 'DID', 'Phone', 'Attempt', 'Status', 'Answered at', 'Duration (s)', 'Billsec (s)', 'Pulses', 'Cost']);
+            fputcsv($out, array_merge(['Time', 'Campaign', 'DID', 'Phone', 'Attempt', 'Status', 'Answered at', 'Duration (s)', 'Billsec (s)', 'Pulses', $manager ? 'Charged' : 'Cost'], $manager ? ['User', 'Admin cost', 'Profit'] : []));
             $query->lazyById(1000, 'call_attempts.id', 'id')->each(function ($a) use ($out) {
-                fputcsv($out, array_map([self::class, 'csvSafe'], [
+                fputcsv($out, array_map([self::class, 'csvSafe'], array_merge([
                     $a->created_at, $a->campaign?->name, $a->did?->number, $a->phone, '#'.$a->attempt_no,
                     $a->status->value, $a->answered_at, $a->duration, $a->billsec, $a->pulses, $a->cost,
-                ]));
+                ], $manager ? [$a->user?->name, $a->admin_id ? $a->admin_cost : '', $a->admin_id ? round((float) $a->cost - (float) $a->admin_cost, 4) : ''] : [])));
             });
             fclose($out);
         }, $file, ['Content-Type' => 'text/csv; charset=UTF-8']);
@@ -114,16 +116,34 @@ class CallReport extends Component
         return $v !== '' && str_contains("=+-@\t\r", $v[0]) ? "'".$v : $v;
     }
 
+    /**
+     * Cost by user and DID (managers): what each user was charged on each DID, what the Admin paid for the
+     * same calls, and the Admin's profit (charged to the user minus the Admin's own cost).
+     */
+    private function breakdown($q)
+    {
+        return (clone $q)->setEagerLoads([])->reorder()
+            ->join('users as u', 'u.id', '=', 'call_attempts.user_id')
+            ->join('dids as d', 'd.id', '=', 'call_attempts.did_id')
+            ->leftJoin('users as adm', 'adm.id', '=', 'call_attempts.admin_id')
+            ->whereNotNull('call_attempts.billed_at')
+            ->groupBy('call_attempts.user_id', 'call_attempts.did_id', 'call_attempts.admin_id', 'u.name', 'd.number', 'adm.name')
+            ->selectRaw('u.name as user_name, d.number as did_number, adm.name as admin_name, call_attempts.admin_id as admin_id, count(*) calls, coalesce(sum(call_attempts.billsec),0) billsec, coalesce(sum(call_attempts.cost),0) charged, coalesce(sum(call_attempts.admin_cost),0) admin_cost')
+            ->orderByDesc('charged')->limit(200)->get();
+    }
+
     public function render()
     {
         $user = Auth::user();
         $q = $this->filteredQuery();
 
-        $summary = (clone $q)->selectRaw("count(*) total, sum(answered_at is not null) answered, sum(status='NO_ANSWER') no_answer, sum(status='BUSY') busy, sum(status in ('FAILED','TEMPORARY_FAILURE','INVALID_NUMBER')) failed, coalesce(sum(duration),0) duration, coalesce(sum(billsec),0) billsec, coalesce(sum(cost),0) cost")->first();
+        $summary = (clone $q)->selectRaw("count(*) total, sum(answered_at is not null) answered, sum(status='NO_ANSWER') no_answer, sum(status='BUSY') busy, sum(status in ('FAILED','TEMPORARY_FAILURE','INVALID_NUMBER')) failed, coalesce(sum(duration),0) duration, coalesce(sum(billsec),0) billsec, coalesce(sum(cost),0) cost, coalesce(sum(admin_cost),0) admin_cost, coalesce(sum(case when admin_id is not null then cost - admin_cost else 0 end),0) profit")->first();
+        $breakdown = $user->isManager() ? $this->breakdown($q) : collect();
 
         return view('livewire.call-report', [
             'attempts' => $q->latest('call_attempts.id')->paginate(25),
             'summary' => $summary,
+            'breakdown' => $breakdown,
             'campaigns' => Campaign::visibleTo($user)->orderBy('name')->get(['id', 'name']),
             'dids' => (match (true) {
                 $user->isSystemAdmin() => Did::query(),

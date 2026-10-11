@@ -12,7 +12,7 @@ class User extends Authenticatable
 {
     use Notifiable;
 
-    protected $fillable = ['name', 'email', 'password', 'status', 'valid_until', 'created_by'];
+    protected $fillable = ['name', 'email', 'password', 'status', 'valid_until', 'rate_per_pulse', 'pulse_seconds', 'balance', 'created_by'];
 
     protected $hidden = ['password', 'remember_token'];
 
@@ -45,6 +45,40 @@ class User extends Authenticatable
             $this->isManager() => Did::query()->where('status', 'active')->where(fn ($w) => $w->whereIn('created_by', $this->visibleOwnerIds())->orWhereIn('dids.id', $this->dids()->select('dids.id'))),
             default => $this->dids()->where('status', 'active'),
         };
+    }
+
+    /** An Admin account with a call charge and balance (given by the Super Admin). */
+    public function hasWallet(): bool
+    {
+        return $this->isAdmin() && $this->rate_per_pulse !== null;
+    }
+
+    /**
+     * The Admin whose balance pays for this person's calls: the Admin themself, or the Admin a User belongs to.
+     * Null when nobody is billed (System / Super Admin campaigns, or an Admin without a wallet).
+     */
+    public function billingAdmin(): ?self
+    {
+        $admin = match (true) {
+            $this->isAdmin() => $this,
+            $this->isNormalUser() => $this->creator?->isAdmin() ? $this->creator : null,
+            default => null,
+        };
+
+        return $admin?->hasWallet() ? $admin : null;
+    }
+
+    /** Same rule as a DID: the balance must cover one more pulse on top of the calls already in flight (rate 0 = never blocked). */
+    public function canAffordAnotherCall(int $inFlight = 0): bool
+    {
+        $rate = (float) $this->rate_per_pulse;
+
+        return $rate <= 0 || (float) $this->balance + 1e-9 >= $rate * ($inFlight + 1);
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(UserTransaction::class);
     }
 
     public function campaigns(): HasMany

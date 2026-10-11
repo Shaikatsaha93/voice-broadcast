@@ -5,6 +5,8 @@ namespace App\Services\Did;
 use App\Models\CallAttempt;
 use App\Models\Did;
 use App\Models\DidTransaction;
+use App\Models\User;
+use App\Models\UserTransaction;
 use App\Services\Audit\Audit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -43,6 +45,30 @@ class DidBilling
         if ($cost > 0) {
             $did->update(['balance' => DB::raw('balance - '.number_format($cost, 4, '.', ''))]);
             $this->ledger($did->refresh(), 'charge', -$cost, "Call to {$a->phone} ({$pulses} pulse".($pulses === 1 ? '' : 's').')', null, $a->id);
+        }
+
+        $this->chargeAdmin($a);
+    }
+
+    /** The same call is also charged to the Admin the caller belongs to, at that Admin's own rate and pulse length. */
+    private function chargeAdmin(CallAttempt $a): void
+    {
+        $admin = $a->campaign?->user?->billingAdmin();
+        if (! $admin) {
+            return;
+        }
+        $admin = User::whereKey($admin->id)->lockForUpdate()->first();
+        $pulses = max(1, (int) ceil((int) $a->billsec / max(1, (int) $admin->pulse_seconds)));
+        $cost = round($pulses * (float) $admin->rate_per_pulse, 4);
+        $a->forceFill(['admin_id' => $admin->id, 'admin_pulses' => $pulses, 'admin_cost' => $cost])->save();
+
+        if ($cost > 0) {
+            $admin->update(['balance' => DB::raw('coalesce(balance, 0) - '.number_format($cost, 4, '.', ''))]);
+            $admin->refresh();
+            UserTransaction::create([
+                'user_id' => $admin->id, 'call_attempt_id' => $a->id, 'type' => 'charge', 'amount' => -$cost, 'balance_after' => $admin->balance,
+                'note' => "Call to {$a->phone} ({$pulses} pulse".($pulses === 1 ? '' : 's').')', 'created_at' => now(),
+            ]);
         }
     }
 
