@@ -51,7 +51,7 @@ class AudioController extends Controller
      */
     public function replace(UploadAudioRequest $request, AudioFile $audio)
     {
-        Gate::authorize('use', $audio);
+        Gate::authorize('replace', $audio);
         $manager = $request->user()->isSystemAdmin() || $request->user()->isSuperAdmin();
         $blocked = $manager ? ['RUNNING', 'QUEUED'] : null;
         $uses = \App\Models\Campaign::where('audio_file_id', $audio->id);

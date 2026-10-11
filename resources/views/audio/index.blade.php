@@ -10,7 +10,7 @@
 @php $pending = $audios->filter(fn ($a) => in_array($a->status, ['UPLOADED', 'PROCESSING']))->pluck('id'); @endphp
 <div id="audio-table" class="vb-card overflow-x-auto p-2" data-status-url="{{ route('audio.status') }}" data-pending="{{ $pending->implode(',') }}">
     <table class="vb-table">
-        <thead><tr><th>Name</th>@if(auth()->user()->isManager())<th>Uploaded by</th>@endif<th>Status</th><th>Duration</th><th>Play</th><th>Replace</th>@if(auth()->user()->isManager())<th></th>@endif</tr></thead>
+        <thead><tr><th>Name</th>@if(auth()->user()->isManager())<th>Uploaded by</th>@endif<th>Status</th><th>Duration</th><th>Play</th><th>Replace</th>@if(auth()->user()->isManager() && ! auth()->user()->isAdmin())<th></th>@endif</tr></thead>
         <tbody>
         @forelse($audios as $a)
             <tr>
@@ -18,11 +18,11 @@
                 <td><x-status :value="$a->status" />@if(in_array($a->status, ['UPLOADED', 'PROCESSING']))<span class="loading loading-spinner loading-xs ml-1 align-middle text-primary" title="Processing, this updates by itself"></span>@endif <span class="text-xs text-error">{{ $a->error }}</span></td>
                 <td class="whitespace-nowrap tabular-nums" @if($a->duration) title="Exact length: {{ $a->duration }} sec" @endif>@if($a->duration){{ intdiv((int) $a->duration, 60) }}:{{ str_pad((string) ((int) $a->duration % 60), 2, '0', STR_PAD_LEFT) }}@else<span class="text-base-content/50">-</span>@endif</td>
                 <td>@if($a->isReady())<audio controls preload="none" src="{{ route('audio.stream', $a) }}"></audio>@endif</td>
-                <td>@can('use', $a)<form method="POST" action="{{ route('audio.replace', $a) }}" enctype="multipart/form-data" class="flex min-w-64 gap-2">@csrf<input type="file" name="audio" accept=".wav,.mp3" required class="file-input file-input-bordered file-input-xs w-full"><button class="btn btn-outline btn-primary btn-xs">Replace</button></form>@endcan @can('download', $a)<a href="{{ route('audio.download', $a) }}" class="btn btn-outline btn-xs mt-1"><i class="bi bi-download"></i>Download original</a>@endcan</td>
-                @if(auth()->user()->isManager())<td>@can('delete', $a)<form method="POST" action="{{ route('audio.destroy', $a) }}" onsubmit="return confirm('Delete this audio file permanently?')">@csrf @method('DELETE')<button class="btn btn-outline btn-error btn-xs"><i class="bi bi-trash"></i>Delete</button></form>@endcan</td>@endif
+                <td>@can('replace', $a)<form method="POST" action="{{ route('audio.replace', $a) }}" enctype="multipart/form-data" class="flex min-w-64 gap-2">@csrf<input type="file" name="audio" accept=".wav,.mp3" required class="file-input file-input-bordered file-input-xs w-full"><button class="btn btn-outline btn-primary btn-xs">Replace</button></form>@endcan @can('download', $a)<a href="{{ route('audio.download', $a) }}" class="btn btn-outline btn-xs mt-1"><i class="bi bi-download"></i>Download original</a>@endcan</td>
+                @if(auth()->user()->isManager() && ! auth()->user()->isAdmin())<td>@can('delete', $a)<form method="POST" action="{{ route('audio.destroy', $a) }}" onsubmit="return confirm('Delete this audio file permanently?')">@csrf @method('DELETE')<button class="btn btn-outline btn-error btn-xs"><i class="bi bi-trash"></i>Delete</button></form>@endcan</td>@endif
             </tr>
         @empty
-            <tr><td colspan="7" class="py-6 text-center text-base-content/75">No audio files yet.</td></tr>
+            <tr><td colspan="{{ auth()->user()->isAdmin() ? 6 : 7 }}" class="py-6 text-center text-base-content/75">No audio files yet.</td></tr>
         @endforelse
         </tbody>
     </table>

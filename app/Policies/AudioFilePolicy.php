@@ -17,6 +17,12 @@ class AudioFilePolicy
         return $a->user_id === $u->id || $this->reviewer($u, $a);
     }
 
+    /** Replace the file: its owner (a User, or a Super / System Admin), or a System / Super Admin for audio in their tree. An Admin cannot replace audio. */
+    public function replace(User $u, AudioFile $a): bool
+    {
+        return ($a->user_id === $u->id && ! $u->isAdmin()) || $this->reviewer($u, $a);
+    }
+
     /** Download the uploaded original (to convert it): System Admin / Super Admin only. */
     public function download(User $u, AudioFile $a): bool
     {
@@ -29,9 +35,9 @@ class AudioFilePolicy
         return ($u->isSystemAdmin() || $u->isSuperAdmin()) && $u->canViewActivityOf($a->user);
     }
 
-    /** Only admins / super admins, and only for audio they can see (their own or their users'). */
+    /** Only System Admin / Super Admin, and only for audio in their tree. An Admin cannot delete audio. */
     public function delete(User $u, AudioFile $a): bool
     {
-        return $u->isManager() && $this->view($u, $a);
+        return $this->reviewer($u, $a);
     }
 }
