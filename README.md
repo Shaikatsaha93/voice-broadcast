@@ -2,7 +2,7 @@
 
 Laravel 13 · PHP 8.3+ · MariaDB/MySQL · Redis · Livewire + Blade · Tailwind · Asterisk (AMI/ARI, PJSIP)
 
-Three roles (Super Admin / Admin / User) + DIDs with **SIP trunk registration from the portal** + **DID balance billed per pulse** + **DID concurrency** + campaigns + number lists + audio + approval + Asterisk calling + retry (all / per result) + call status + reporting. Nothing else (no IVR, SMS, tenants...).
+Four roles (System Admin / Super Admin / Admin / User) + **Reseller and Own DIDs** with **SIP trunk registration from the portal** + **DID balance billed per pulse** (reseller) or **MRC** (own) + **validity dates** for DIDs and accounts + **DID concurrency** + campaigns + number lists + audio + approval + Asterisk calling + retry (all / per result) + call status + reporting. Nothing else (no IVR, SMS, tenants...).
 
 ## Requirements
 PHP 8.3+ (`pdo_mysql`, `mbstring`, `fileinfo`, `zip`, `redis` or Predis), Composer, Node 20+, MariaDB 10.6+/MySQL 8, Redis 6+, FFmpeg/ffprobe, Asterisk 18+ (PJSIP).
@@ -39,20 +39,32 @@ php artisan app:create-admin admin@example.com   # first System Admin, prompts f
 No Asterisk credential is hardcoded; everything comes from `.env`.
 
 ## Roles
+Hierarchy, top to bottom: **System Admin → Super Admin → Admin → User**. Ownership is stored in `users.created_by` and `dids.created_by`; everybody sees only themself and the accounts below them (`User::descendantIds()`).
+
 | Role | Can do |
 |---|---|
-| **System Admin** (top) | everything: create Super Admins, Admins and Users, register any DID, approve any campaign, run campaigns, see all activity of every account and the **Audit** log (System Admin only) |
-| **Super Admin** | create Admins and Users; sees only their own tree (themself, the Admins and Users they created and everyone below them); approves campaigns of that tree, runs campaigns, registers DIDs inside that tree. Never sees another Super Admin's data. No Audit access |
-| **Admin** | create **users only**; register DIDs; run their own campaigns (their campaigns are approved by their Super Admin; an Admin has no approval power); see only their own users' activity, campaigns, audio, reports and DIDs. Two admins never see each other's data. No Audit access |
+| **System Admin** (top) | everything: create Super Admins, Admins and Users, register any DID, approve any campaign, run campaigns, see all activity of every account, download / replace any audio, and the **Audit** log (System Admin only) |
+| **Super Admin** | create Admins and Users; sees only their own tree (themself, the Admins and Users they created and everyone below them); approves campaigns of that tree, runs campaigns, registers DIDs inside that tree, downloads / replaces audio of that tree. Never sees another Super Admin's data. No Audit access |
+| **Admin** | create **users only**; register DIDs; run their own campaigns; see only their own users' activity, campaigns, audio, reports and DIDs. **No approval power** (their campaigns are approved by their Super Admin) and no audio download / replace of other people's files; may delete audio of their tree. Two Admins never see each other's data. No Audit access |
 | **User** | create and run own campaigns on the DIDs assigned to them, upload audio, see own reports and DID balance |
 
-Admins and Super Admins can do everything a User can (create, edit, submit, start, pause, resume, cancel, delete and retry campaigns) for their own campaigns and, for an Admin, their users' campaigns. Only Admin / Super Admin see the **Delete** button for audio. Ownership is stored in `users.created_by` and `dids.created_by`.
+System Admin, Super Admin and Admin can do everything a User can (create, edit, submit, start, pause, resume, cancel, delete and retry campaigns) for their own campaigns and the campaigns of the accounts below them. Admin and User accounts have a **required validity date** (see below). The first System Admin is created with `php artisan app:create-admin`.
 
-## DIDs, SIP trunk and balance
-* **Register a DID** (Admin / Super Admin) with the number, max concurrent calls, SIP host / port / username / password, and an opening balance. Saving writes the trunk to `ASTERISK_PJSIP_FILE` (auth, aor, endpoint, identify, registration named `sip-<id>`), reloads PJSIP through AMI and the page shows the registration status (refreshed every minute by `dids:sip-status`). The SIP password is stored encrypted.
-* **Rate**: "charge ৳ X for every N sec" (a *pulse*). Fields: `rate_per_pulse`, `pulse_seconds`.
-* **Balance check**: before every call `DidSlotManager::acquire` requires `balance >= rate × (calls in flight + 1)`. Not enough balance → no call, the campaign gets `blocked_reason = INSUFFICIENT_BALANCE` and continues when balance is added.
-* **Charging**: when a call finishes, `DidBilling` charges `max(1, ceil(billsec / pulse_seconds))` pulses (answered calls only) and writes a `did_transactions` ledger row. Balance can be added / removed on the DID page; the cost is shown per call in the report and the balance on the user's dashboard.
+## Audio
+Users upload WAV or MP3; the file is probed and normalized to 8 kHz mono WAV before it is `READY`. A System Admin / Super Admin can **Download original** of any audio in their tree, convert it, and **Replace** it (not while a campaign using it is RUNNING or QUEUED); both actions are audited. Admins / Super Admins / System Admins can delete audio that no campaign uses.
+
+## DIDs, SIP trunk, balance and MRC
+* **Register a DID** (Admin / Super Admin / System Admin): number, max concurrent calls, SIP host / port / username / password, **DID type** and a **validity date**. Saving writes the trunk to `ASTERISK_PJSIP_FILE` (auth, aor, endpoint, identify, registration named `sip-<id>`), reloads PJSIP through AMI and the page shows the registration status (refreshed every minute by `dids:sip-status`). The SIP password is stored encrypted.
+* **DID type** (radio buttons on the form):
+  * **Reseller DID**: call charge is required, "charge ৳ X for every N sec" (a *pulse*, `rate_per_pulse`, `pulse_seconds`), plus an opening balance, and an **Opening balance valid until** date.
+  * **Own DID**: a **monthly recurring charge (MRC)**, required and always more than 0, and an **MRC valid until** date. No per-call charge.
+* **Balance check** (reseller DIDs): before every call `DidSlotManager::acquire` requires `balance >= rate × (calls in flight + 1)`. Not enough balance → no call, the campaign gets `blocked_reason = INSUFFICIENT_BALANCE` and continues when balance is added.
+* **Charging**: when a call finishes, `DidBilling` charges `max(1, ceil(billsec / pulse_seconds))` pulses (answered calls only) and writes a `did_transactions` ledger row. Balance can be added / removed on the DID page; the cost is shown per call in the report and the balance on the user's dashboard. MRC is only stored and shown; it is not charged automatically.
+* **Validity date** (required): the last valid day. From the next day `dids:expire` (every minute) sets the DID **inactive**, removes it from the Asterisk trunk config and writes `did.expired` to the audit log. Campaigns on an expired DID wait (`blocked_reason = DID_EXPIRED`) until the date is extended. An expired DID cannot be activated or saved as active without a new date.
+* **Dialing**: the leading `88` of `880XXXXXXXXXX` is dropped in the dial string (`8801624374389` → `01624374389`); stored numbers and reports keep the full number.
+
+## Account validity
+Admin and User accounts need a **Valid until** date when they are created or edited (System Admin / Super Admin accounts do not expire). `users:expire` (every minute) sets accounts whose date has passed to **inactive** (`user.expired` in the audit log); inactive users cannot log in and a live session is ended on the next request. An expired account cannot be activated without a new date.
 
 ## Database / Redis / Queue / FFmpeg
 * Create DB: `CREATE DATABASE broadcast CHARACTER SET utf8mb4;` then `php artisan migrate --seed`.
@@ -64,7 +76,7 @@ Admins and Super Admins can do everything a User can (create, edit, submit, star
 ```bash
 php artisan serve                 # dev only
 php artisan queue:work            # workers
-php artisan schedule:work         # scheduler (prod: cron `* * * * * php artisan schedule:run`)
+php artisan schedule:work         # scheduler (prod: cron `* * * * * php artisan schedule:run`): calls:reconcile, dids:sip-status, users:expire, dids:expire
 php artisan asterisk:listen       # AMI event listener (long running)
 php artisan test                  # tests (uses DB `broadcast_test`)
 ```
@@ -86,7 +98,7 @@ exten => s,1,NoOp(${CALL_REF})
 
 ## Business rules and decisions
 * **DID assignment**: many-to-many table `did_user`. With `DID_SHARED_ASSIGNMENT=false` (default) assigning a DID that already has a user is rejected (enforced under a row lock).
-* **Approval does not dial.** Flow: user creates DRAFT → imports numbers → submits (`PENDING_APPROVAL`) → Super Admin, or the Admin of that user, approves (`APPROVED`) → approval **starts it automatically** (`RUNNING`, or `QUEUED` when `scheduled_at` is in the future; the scheduler starts it when due). The user does not press Start again. Nothing calls before approval.
+* **Approval does not dial.** Flow: user creates DRAFT → imports numbers → submits (`PENDING_APPROVAL`) → the Super Admin above that user (or the System Admin) approves (`APPROVED`) → approval **starts it automatically** (`RUNNING`, or `QUEUED` when `scheduled_at` is in the future; the scheduler starts it when due). The user does not press Start again. Nothing calls before approval.
 * **Retry convention**: `max_attempts` = maximum *total* attempts (3 → attempts 1,2,3). Automatically retried: NO_ANSWER, BUSY, TEMPORARY_FAILURE. Not retried: answered, INVALID_NUMBER, CANCELLED. A per-campaign `retry_delay_seconds` is applied.
 * **Manual retry** (campaign page, COMPLETED / CANCELLED / RUNNING / PAUSED): *Call results* cards **Answered / No answer / Busy / Failed (/ Cancelled)** show the number of calls, the same numbers as the call report. Select one or more cards (or *Select all*) and press **Retry**: every number that had a call with that result is queued again with a fresh attempt budget (`retry_base`). A completed or cancelled campaign goes back to RUNNING.
 * "Answered" in reports = attempt has `answered_at`; its terminal status is `COMPLETED`.
@@ -109,7 +121,7 @@ Slots are released when the attempt is finalized (hangup/failure/cancel). Capaci
 `QUEUED → DIALING → RINGING → ANSWERED → PLAYBACK_STARTED → PLAYBACK_COMPLETED → COMPLETED` or terminal `NO_ANSWER | BUSY | FAILED | TEMPORARY_FAILURE | INVALID_NUMBER | CANCELLED`. Recipient states: `PENDING, IN_PROGRESS, RETRY_PENDING, ANSWERED, EXHAUSTED, FAILED, CANCELLED`. Every attempt is its own `call_attempts` row (`unique(recipient_id, attempt_no)`). Events are idempotent (`processed_events` key), rank-monotonic (a late "Ringing" never overrides "Up") and finalization happens exactly once (row lock + `finalized` flag). Duplicate `OriginateBroadcastCall` jobs lose the `QUEUED→DIALING` race and do nothing; `tries = 1` prevents automatic re-origination.
 
 ## Authorization model
-Roles `super_admin` / `admin` / `user` (see *Roles*; tables `roles, permissions, role_user, permission_role`). Server-side only: route middleware `role:`, Policies (`CampaignPolicy`, `DidPolicy`, `AudioFilePolicy`, `CallAttemptPolicy`, `UserPolicy`), Form Request authorization/validation (DID must be assigned+active, audio must be own, concurrency ≤ DID max), query scopes `visibleTo($user)` and `User::limitToVisibleOwners` on every list/report, authorized audio streaming (private disk). Reports (Livewire) re-scope on every request, so tampering with filters can't widen access. Inactive users are logged out on the next request.
+Roles `system_admin` / `super_admin` / `admin` / `user` (see *Roles*; tables `roles, permissions, role_user, permission_role`). Server-side only: route middleware `role:`, Policies (`CampaignPolicy`, `DidPolicy`, `AudioFilePolicy`, `CallAttemptPolicy`, `UserPolicy`), Form Request authorization/validation (DID must be assigned+active, audio must be own, concurrency ≤ DID max), query scopes `visibleTo($user)` and `User::limitToVisibleOwners` on every list/report, authorized audio streaming (private disk). Reports (Livewire) re-scope on every request, so tampering with filters can't widen access. Inactive users are logged out on the next request.
 
 ## Security
 CSRF, Blade escaping, Eloquent bindings, validated uploads (extension + MIME + size + ffprobe integrity, random filenames, private disk), login throttling, hashed passwords + session regeneration, secure headers (`SecurityHeaders` middleware), env-only secrets, audit log (`audit_logs`) for users, DIDs, assignments, concurrency changes and every campaign state change.
