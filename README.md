@@ -45,7 +45,7 @@ Hierarchy, top to bottom: **System Admin → Super Admin → Admin → User**. O
 |---|---|
 | **System Admin** (top) | everything: create Super Admins, Admins and Users, register any DID, approve any campaign, run campaigns, see all activity of every account, download / replace any audio, and the **Audit** log (System Admin only) |
 | **Super Admin** | create Admins and Users; sees only their own tree (themself, the Admins and Users they created and everyone below them); approves campaigns of that tree, runs campaigns, registers DIDs inside that tree, downloads / replaces audio of that tree. Never sees another Super Admin's data. No Audit access |
-| **Admin** | create **users only**; register DIDs; run their own campaigns; see only their own users' activity, campaigns, audio, reports and DIDs. **No approval power** (their campaigns are approved by their Super Admin) and no audio download / replace of other people's files; may delete audio of their tree. Two Admins never see each other's data. No Audit access |
+| **Admin** | create **users only**; register DIDs; run their own campaigns (paid from the Admin balance, see *Admin balance*); see only their own users' activity, campaigns, audio, reports and DIDs. **No approval power** (their campaigns are approved by their Super Admin) and no audio download / replace of other people's files; may delete audio of their tree. Two Admins never see each other's data. No Audit access |
 | **User** | create and run own campaigns on the DIDs assigned to them, upload audio, see own reports and DID balance |
 
 System Admin, Super Admin and Admin can do everything a User can (create, edit, submit, start, pause, resume, cancel, delete and retry campaigns) for their own campaigns and the campaigns of the accounts below them. Admin and User accounts have a **required validity date** (see below). The first System Admin is created with `php artisan app:create-admin`.
@@ -66,8 +66,12 @@ Users upload WAV or MP3; the file is probed and normalized to 8 kHz mono WAV bef
 ## Admin balance (two-level billing)
 A Super Admin / System Admin gives every **Admin** account a **call charge** (taka per pulse of N seconds) and a **balance** when creating it; the balance can be topped up or reduced later on the Admin's page (ledger in `user_transactions`, every change audited). When a **User** belongs to an Admin (the Admin created the User), or the Admin runs a campaign themself, every answered call is charged **twice**: the DID balance at the DID's rate, and the Admin's balance at the Admin's rate (`DidBilling::chargeAdmin`; stored in `call_attempts.admin_id / admin_pulses / admin_cost`). Before every call `DidSlotManager::acquire` checks both balances (`admin_balance` denial, campaign `blocked_reason = ADMIN_BALANCE`): when the Admin's balance is used up, no call is generated even if the DID still has balance, and the campaign continues by itself after a top-up. The **Call report** shows managers per call the user, *Charged* (what the user paid on the DID), *Admin cost* and *Profit* (Charged - Admin cost), summary cards for the same, a **Cost by user and DID** table with totals, and the same columns in the CSV export. Users created directly by a Super Admin / System Admin have no Admin to bill, and an Admin without a wallet (older accounts) is not billed.
 
+## Dashboards and reports
+* **Dashboard** (refreshes every 5 s): System Admin / Super Admin see users, DIDs, pending and running campaigns, active and today's calls and DID usage for their scope; an **Admin** additionally sees **My balance** and **Call charge** (no pending-approval card, Admins cannot approve); a **User** sees assigned DIDs, DID balance, own campaigns and today's results.
+* **Call report** (filters: campaign, DID, status Answered / No answer / Busy / Failed / Cancelled, phone, date): for managers it adds *User*, *Charged* (what the user paid on the DID), *Admin cost* and *Profit* (Charged - Admin cost) per call, summary cards, a **Cost by user and DID** table with totals, and the same columns in the CSV export. A User sees the plain *Cost* only.
+
 ## Account validity
-Admin and User accounts need a **Valid until** date when they are created or edited (System Admin / Super Admin accounts do not expire). `users:expire` (every minute) sets accounts whose date has passed to **inactive** (`user.expired` in the audit log); inactive users cannot log in and a live session is ended on the next request. An expired account cannot be activated without a new date.
+An **Admin** account also needs a call charge and a balance when it is created (see *Admin balance*). Admin and User accounts need a **Valid until** date when they are created or edited (System Admin / Super Admin accounts do not expire). `users:expire` (every minute) sets accounts whose date has passed to **inactive** (`user.expired` in the audit log); inactive users cannot log in and a live session is ended on the next request. An expired account cannot be activated without a new date.
 
 ## Database / Redis / Queue / FFmpeg
 * Create DB: `CREATE DATABASE broadcast CHARACTER SET utf8mb4;` then `php artisan migrate --seed`.
@@ -128,6 +132,15 @@ Roles `system_admin` / `super_admin` / `admin` / `user` (see *Roles*; tables `ro
 
 ## Security
 CSRF, Blade escaping, Eloquent bindings, validated uploads (extension + MIME + size + ffprobe integrity, random filenames, private disk), login throttling, hashed passwords + session regeneration, secure headers (`SecurityHeaders` middleware), env-only secrets, audit log (`audit_logs`) for users, DIDs, assignments, concurrency changes and every campaign state change.
+
+## Updating an existing install
+```bash
+php artisan migrate --force    # new columns / tables
+php artisan db:seed --force    # creates the System Admin role and refreshes role labels / permissions
+php artisan view:clear && sudo supervisorctl restart all
+sudo bash deploy/harden.sh /var/www/broadcast   # see below; run after every copy of the code
+```
+An older Super Admin account that should be the top account must be changed to the **System Admin** role (Users page, or `app:create-admin` for a new one); the old Admin accounts keep working but need a call charge and balance before their users' calls are billed to them.
 
 ## Protecting the code on the server
 After **every** deploy (rsync / git pull resets file modes) run, as root:
