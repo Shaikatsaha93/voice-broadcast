@@ -2,7 +2,7 @@
 @section('content')
 <div class="mb-4">
     <h1 class="vb-title">{{ $user->name }}</h1>
-    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-base-content/75">{{ $user->email }} · {{ $user->roles->first()?->label }} · <x-status :value="$user->status" /></div>
+    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-base-content/75">{{ $user->email }} · {{ $user->roles->first()?->label }} · <x-status :value="$user->status" />@if($user->valid_until) · valid until {{ $user->valid_until->format('Y-m-d') }}@if($user->isExpired()) <span class="badge badge-error badge-soft badge-sm">EXPIRED</span>@endif @endif</div>
 </div>
 <div class="mb-6 flex flex-wrap gap-2">
     <form method="POST" action="{{ route('admin.users.toggle', $user) }}">@csrf<button class="btn btn-outline btn-sm">{{ $user->status === 'active' ? 'Deactivate' : 'Activate' }}</button></form>

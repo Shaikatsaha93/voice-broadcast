@@ -29,10 +29,10 @@ class CampaignPolicy
         return $this->owns($u, $c) && in_array($c->status, [CampaignStatus::DRAFT, CampaignStatus::REJECTED], true);
     }
 
-    /** Super Admin approves any campaign; an Admin approves their own and their users' campaigns. */
+    /** System Admin approves any campaign; a Super Admin those of their own tree. An Admin cannot approve. */
     public function approve(User $u, Campaign $c): bool
     {
-        return $u->isSuperAdmin() || ($u->isAdmin() && ($c->user_id === $u->id || $u->canManageUser($c->user)));
+        return $u->isSystemAdmin() || ($u->isSuperAdmin() && ($c->user_id === $u->id || $u->canManageUser($c->user)));
     }
 
     public function control(User $u, Campaign $c): bool

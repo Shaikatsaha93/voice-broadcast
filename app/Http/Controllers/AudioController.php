@@ -45,12 +45,18 @@ class AudioController extends Controller
         return back()->with('status', 'Audio uploaded; processing.');
     }
 
-    /** Replace is only allowed while no campaign using this audio is past DRAFT/REJECTED. */
+    /**
+     * The owner can replace the audio while no campaign using it is past DRAFT/REJECTED. A System Admin / Super Admin
+     * (for audio of their own tree) can also replace it later, e.g. with a converted copy, unless a campaign using it is live.
+     */
     public function replace(UploadAudioRequest $request, AudioFile $audio)
     {
         Gate::authorize('use', $audio);
-        if (\App\Models\Campaign::where('audio_file_id', $audio->id)->whereNotIn('status', ['DRAFT', 'REJECTED'])->exists()) {
-            return back()->withErrors(['audio' => 'Audio is locked: a campaign using it was already submitted.']);
+        $manager = $request->user()->isSystemAdmin() || $request->user()->isSuperAdmin();
+        $blocked = $manager ? ['RUNNING', 'QUEUED'] : null;
+        $uses = \App\Models\Campaign::where('audio_file_id', $audio->id);
+        if ($manager ? $uses->whereIn('status', $blocked)->exists() : $uses->whereNotIn('status', ['DRAFT', 'REJECTED'])->exists()) {
+            return back()->withErrors(['audio' => $manager ? 'A campaign using this audio is running or queued. Pause or cancel it first.' : 'Audio is locked: a campaign using it was already submitted.']);
         }
         $file = $request->file('audio');
         app(\App\Services\Audio\AsteriskAudio::class)->forget($audio);
@@ -60,7 +66,7 @@ class AudioController extends Controller
             'path' => $file->storeAs('audio/'.$audio->user_id, bin2hex(random_bytes(16)).'.'.$file->getClientOriginalExtension()),
             'mime' => $file->getMimeType(), 'size' => $file->getSize(), 'normalized_path' => null, 'status' => 'UPLOADED', 'duration' => null,
         ]);
-        Audit::log('audio.replaced', $audio);
+        Audit::log('audio.replaced', $audio, null, null, ['by' => $request->user()->id, 'owner' => $audio->user_id]);
         ProcessAudioFile::dispatch($audio->id);
 
         return back()->with('status', 'Audio replaced; processing.');
@@ -79,6 +85,16 @@ class AudioController extends Controller
         $audio->delete();
 
         return back()->with('status', 'Audio deleted.');
+    }
+
+    /** Download the original upload, so a System Admin / Super Admin can convert it and upload the converted file back. */
+    public function download(AudioFile $audio)
+    {
+        Gate::authorize('download', $audio);
+        abort_unless(Storage::exists($audio->path), 404);
+        Audit::log('audio.downloaded', $audio);
+
+        return Storage::download($audio->path, $audio->original_name, ['X-Content-Type-Options' => 'nosniff']);
     }
 
     /** Authorized streaming only - files are never publicly reachable. */

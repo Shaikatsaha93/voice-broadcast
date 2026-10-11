@@ -14,7 +14,19 @@ class AudioFilePolicy
 
     public function use(User $u, AudioFile $a): bool
     {
-        return $a->user_id === $u->id || ($u->isManager() && $u->canViewActivityOf($a->user));
+        return $a->user_id === $u->id || $this->reviewer($u, $a);
+    }
+
+    /** Download the uploaded original (to convert it): System Admin / Super Admin only. */
+    public function download(User $u, AudioFile $a): bool
+    {
+        return $this->reviewer($u, $a);
+    }
+
+    /** System Admin / Super Admin for audio they can see; an Admin has no review power over other people's audio. */
+    private function reviewer(User $u, AudioFile $a): bool
+    {
+        return ($u->isSystemAdmin() || $u->isSuperAdmin()) && $u->canViewActivityOf($a->user);
     }
 
     /** Only admins / super admins, and only for audio they can see (their own or their users'). */

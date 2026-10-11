@@ -18,7 +18,7 @@ class ApprovalController extends Controller
     /** Super Admin: every pending campaign. Admin: only those of the normal users they created. */
     public function index(Request $request)
     {
-        abort_unless($request->user()->isManager(), 403);
+        abort_unless($request->user()->isSystemAdmin() || $request->user()->isSuperAdmin(), 403);
         $campaigns = Campaign::visibleTo($request->user())->where('status', CampaignStatus::PENDING_APPROVAL)->with('user:id,name', 'did', 'audio')->withCount('recipients')->oldest('submitted_at')->paginate(20);
 
         return view('admin.approvals', compact('campaigns'));

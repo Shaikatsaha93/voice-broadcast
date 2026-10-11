@@ -17,7 +17,7 @@ class DashboardStats extends Component
     {
         $user = Auth::user();
         $admin = $user->isManager();
-        $super = $user->isSuperAdmin();
+        $super = $user->isSystemAdmin();
 
         $calls = CallAttempt::visibleTo($user)->whereDate('call_attempts.created_at', today());
         $today = [

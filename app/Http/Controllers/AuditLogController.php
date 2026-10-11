@@ -20,7 +20,7 @@ class AuditLogController extends Controller
         $viewer = $request->user();
 
         $logs = AuditLog::with('actor:id,name')
-            ->when(! $viewer->isSuperAdmin(), fn ($q) => $q->where(function ($w) use ($viewer) {
+            ->when(! $viewer->isSystemAdmin(), fn ($q) => $q->where(function ($w) use ($viewer) {
                 $w->where('actor_id', $viewer->id)
                     ->orWhereIn('actor_id', $viewer->managedUserIds())
                     ->orWhere(fn ($u) => $u->where('entity', 'User')->whereIn('entity_id', $viewer->managedUserIds()))

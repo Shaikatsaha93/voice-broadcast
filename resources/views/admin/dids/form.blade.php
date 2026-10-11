@@ -1,15 +1,29 @@
 @extends('layouts.app')
 @section('content')
-<form method="POST" action="{{ $did->exists ? route('admin.dids.update', $did) : route('admin.dids.store') }}" class="vb-card max-w-2xl" autocomplete="off">
+<form method="POST" action="{{ $did->exists ? route('admin.dids.update', $did) : route('admin.dids.store') }}" class="vb-card max-w-5xl" autocomplete="off">
     @csrf @if($did->exists) @method('PUT') @endif
     <div class="card-body gap-3">
         <h1 class="vb-title">{{ $did->exists ? 'Edit' : 'Create' }} DID</h1>
+        <div class="grid grid-cols-1 items-start gap-x-8 gap-y-3 lg:grid-cols-2">
+        <div class="space-y-3">
         <label class="block"><span class="mb-1 block text-sm">Number</span><input name="number" value="{{ old('number', $did->number) }}" class="input w-full" required></label>
         <label class="block"><span class="mb-1 block text-sm">Label</span><input name="label" value="{{ old('label', $did->label) }}" class="input w-full"></label>
         <label class="block"><span class="mb-1 block text-sm">Max concurrent calls</span><input name="max_concurrent_calls" type="number" min="1" value="{{ old('max_concurrent_calls', $did->max_concurrent_calls) }}" class="input w-full" required></label>
         <label class="block"><span class="mb-1 block text-sm">Status</span><select name="status" class="select w-full">@foreach(['active', 'inactive'] as $s)<option @selected(old('status', $did->status) === $s)>{{ $s }}</option>@endforeach</select></label>
 
-        <div class="divider my-1">Call charge and balance</div>
+        @php $type = old('did_type', $did->did_type ?? 'reseller'); @endphp
+        <div>
+            <span class="mb-1 block text-sm">DID type</span>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex cursor-pointer items-center gap-3 rounded-box border border-base-300 p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/10"><input type="radio" name="did_type" value="reseller" class="radio radio-primary radio-sm" @checked($type === 'reseller')><span class="text-sm font-semibold">Reseller DID</span></label>
+                <label class="flex cursor-pointer items-center gap-3 rounded-box border border-base-300 p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/10"><input type="radio" name="did_type" value="own" class="radio radio-primary radio-sm" @checked($type === 'own')><span class="text-sm font-semibold">Own DID</span></label>
+            </div>
+        </div>
+        </div>
+        <div>
+            <div>
+                <div id="panel-reseller" @class(['hidden' => $type !== 'reseller'])>
+                    <p class="mb-2 text-xs text-base-content/70">Call charge is required for a reseller DID.</p>
         <div id="rate-box" class="rounded-box border border-base-300 bg-base-200/40 p-4">
             <p class="mb-2 text-sm font-semibold">How much is a call charged?</p>
             <div class="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
@@ -34,6 +48,19 @@
         @else
             <p class="text-xs text-base-content/70">To add or remove balance, use the Balance section on the DID page.</p>
         @endunless
+                    <label class="mt-3 block"><span class="mb-1 block text-sm">Opening balance valid until</span><input name="valid_until" type="date" required value="{{ old('valid_until', $did->valid_until?->toDateString()) }}" class="input w-full"></label>
+                </div>
+                <div id="panel-own" @class(['hidden' => $type !== 'own'])>
+                    <div class="rounded-box border border-base-300 bg-base-200/40 p-4">
+                        <p class="mb-2 text-sm font-semibold">Monthly recurring charge (MRC)</p>
+                        <label class="input flex w-full items-center gap-1"><span class="font-semibold text-base-content/70">{{ config('broadcast.currency', '৳') }}</span><input name="mrc" type="number" step="0.01" min="0.01" value="{{ old('mrc', $did->mrc) }}" class="grow" placeholder="MRC per month" required></label>
+                        <p class="mt-2 text-xs text-base-content/60">Required, must be more than 0. An own DID has no per-call charge.</p>
+                        <label class="mt-3 block"><span class="mb-1 block text-sm">MRC valid until</span><input name="valid_until" type="date" required value="{{ old('valid_until', $did->valid_until?->toDateString()) }}" class="input w-full"></label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
         <script>
         (() => {
             const box = document.getElementById('rate-box'), rate = box.querySelector('[name=rate_per_pulse]'), sec = box.querySelector('[name=pulse_seconds]'), list = document.getElementById('rate-example'), sym = @json(config('broadcast.currency', '৳'));
@@ -48,7 +75,20 @@
             rate.addEventListener('input', render); sec.addEventListener('input', render); render();
         })();
         </script>
-
+        <script>
+        (() => {
+            const panels = {reseller: document.getElementById('panel-reseller'), own: document.getElementById('panel-own')};
+            const apply = () => {
+                const t = document.querySelector('[name=did_type]:checked')?.value || 'reseller';
+                for (const [k, el] of Object.entries(panels)) {
+                    el.classList.toggle('hidden', k !== t);
+                    el.querySelectorAll('input').forEach(i => i.disabled = k !== t); // hidden fields are neither required nor sent
+                }
+            };
+            document.querySelectorAll('[name=did_type]').forEach(r => r.addEventListener('change', apply));
+            apply();
+        })();
+        </script>
         <div class="divider my-1">SIP trunk (registers this DID in Asterisk)</div>
         <p class="text-xs text-base-content/70">Fill the SIP details from your provider. Asterisk registers automatically and the status shows on the DID page.</p>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">

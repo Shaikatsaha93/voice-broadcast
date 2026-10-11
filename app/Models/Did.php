@@ -8,23 +8,34 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Did extends Model
 {
-    protected $fillable = ['number', 'label', 'status', 'max_concurrent_calls', 'balance', 'rate_per_pulse', 'pulse_seconds', 'trunk', 'created_by', 'sip_host', 'sip_port', 'sip_username', 'sip_password', 'sip_status', 'sip_status_detail', 'sip_checked_at'];
+    protected $fillable = ['number', 'label', 'did_type', 'mrc', 'valid_until', 'status', 'max_concurrent_calls', 'balance', 'rate_per_pulse', 'pulse_seconds', 'trunk', 'created_by', 'sip_host', 'sip_port', 'sip_username', 'sip_password', 'sip_status', 'sip_status_detail', 'sip_checked_at'];
 
     protected $hidden = ['sip_password'];
 
     protected function casts(): array
     {
-        return ['sip_password' => 'encrypted', 'sip_checked_at' => 'datetime'];
+        return ['sip_password' => 'encrypted', 'sip_checked_at' => 'datetime', 'valid_until' => 'date'];
     }
 
-    /** Super Admin sees every DID; an Admin only the DIDs they created. */
+    /** System Admin sees every DID; a Super Admin / Admin the DIDs created by themself or anyone below them. */
     public function scopeVisibleTo($q, User $user)
     {
         return match (true) {
-            $user->isSuperAdmin() => $q,
-            $user->isAdmin() => $q->where('dids.created_by', $user->id),
+            $user->isSystemAdmin() => $q,
+            $user->isManager() => $q->whereIn('dids.created_by', $user->visibleOwnerIds()),
             default => $q->whereRaw('1 = 0'),
         };
+    }
+
+    /** True once the validity date is over (the whole valid_until day is still valid). */
+    public function isExpired(): bool
+    {
+        return $this->valid_until !== null && $this->valid_until->endOfDay()->isPast();
+    }
+
+    public function isOwn(): bool
+    {
+        return $this->did_type === 'own';
     }
 
     public function transactions(): HasMany

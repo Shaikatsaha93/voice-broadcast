@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 
 class CreateAdmin extends Command
 {
-    protected $signature = 'app:create-admin {email} {--name=Super Admin} {--password=}';
+    protected $signature = 'app:create-admin {email} {--name=System Admin} {--password=}';
 
     protected $description = 'Create a Super Admin user (prompts for password when not given).';
 
@@ -24,8 +24,8 @@ class CreateAdmin extends Command
         }
 
         $user = User::updateOrCreate(['email' => $this->argument('email')], ['name' => $this->option('name'), 'password' => $password, 'status' => 'active']);
-        $user->roles()->sync([Role::where('name', Role::SUPER_ADMIN)->value('id')]);
-        $this->info("Super Admin {$user->email} ready.");
+        $user->roles()->sync([Role::where('name', Role::SYSTEM_ADMIN)->value('id')]);
+        $this->info("System Admin {$user->email} ready.");
 
         return self::SUCCESS;
     }

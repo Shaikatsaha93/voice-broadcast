@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Role extends Model
 {
+    public const SYSTEM_ADMIN = 'system_admin';
     public const SUPER_ADMIN = 'super_admin';
     public const ADMIN = 'admin';
     public const USER = 'user';

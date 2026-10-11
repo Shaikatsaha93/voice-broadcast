@@ -10,6 +10,7 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $system = Role::updateOrCreate(['name' => Role::SYSTEM_ADMIN], ['label' => 'System Admin']);
         $admin = Role::firstOrCreate(['name' => Role::SUPER_ADMIN], ['label' => 'Super Admin']);
         $manager = Role::firstOrCreate(['name' => Role::ADMIN], ['label' => 'Admin']);
         $user = Role::updateOrCreate(['name' => Role::USER], ['label' => 'User']);
@@ -21,7 +22,8 @@ class DatabaseSeeder extends Seeder
             Permission::firstOrCreate(['name' => $p]);
         }
 
-        $admin->permissions()->sync(Permission::pluck('id'));
+        $system->permissions()->sync(Permission::pluck('id'));
+        $admin->permissions()->sync(Permission::where('name', '!=', 'audit.view')->pluck('id'));
         $manager->permissions()->sync(Permission::whereIn('name', array_merge(['users.manage', 'campaigns.view_all', 'reports.view_all', 'audit.view'], $own))->pluck('id'));
         $user->permissions()->sync(Permission::whereIn('name', $own)->pluck('id'));
     }

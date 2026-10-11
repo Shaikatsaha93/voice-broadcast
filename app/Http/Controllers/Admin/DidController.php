@@ -42,6 +42,13 @@ class DidController extends Controller
     private function sipAttributes(array $data, ?Did $did = null): array
     {
         unset($data['opening_balance']);
+        // Own DID: no per-call charge, only an MRC. Reseller DID: per-call charge, no MRC.
+        if (($data['did_type'] ?? 'reseller') === 'own') {
+            $data['rate_per_pulse'] = 0;
+            $data['pulse_seconds'] = 60;
+        } else {
+            $data['mrc'] = null;
+        }
         $sip = ['sip_host', 'sip_port', 'sip_username', 'sip_password'];
         $rest = array_diff_key($data, array_flip($sip));
 
@@ -82,9 +89,9 @@ class DidController extends Controller
     public function store(StoreDidRequest $request, TrunkProvisioner $trunks)
     {
         $v = $request->validated();
-        $did = Did::create($this->sipAttributes($v) + ['created_by' => $request->user()->id, 'balance' => (float) ($v['opening_balance'] ?? 0)]);
+        $did = Did::create($this->sipAttributes($v) + ['created_by' => $request->user()->id, 'balance' => $v['did_type'] === 'own' ? 0.0 : (float) ($v['opening_balance'] ?? 0)]);
         app(DidBilling::class)->recordOpening($did, $request->user()->id);
-        Audit::log('did.created', $did, null, null, $did->only('number', 'label', 'status', 'max_concurrent_calls', 'sip_host', 'sip_port', 'sip_username'));
+        Audit::log('did.created', $did, null, null, $did->only('number', 'label', 'did_type', 'mrc', 'status', 'max_concurrent_calls', 'sip_host', 'sip_port', 'sip_username'));
         [$key, $msg] = $this->provision($did, $trunks);
 
         return redirect()->route('admin.dids.show', $did)->with($key, 'DID created. '.$msg);
@@ -127,11 +134,11 @@ class DidController extends Controller
         ]);
     }
 
-    /** Active normal users the viewer may hand a DID to: everyone for a Super Admin, only their own users for an Admin. */
+    /** Active normal users the viewer may hand a DID to: everyone for the System Admin, only the users below them for others. */
     private function assignableUsers(User $viewer)
     {
         return User::whereHas('roles', fn ($q) => $q->where('name', Role::USER))->where('status', 'active')
-            ->when(! $viewer->isSuperAdmin(), fn ($q) => $q->whereIn('users.id', $viewer->managedUserIds()));
+            ->when(! $viewer->isSystemAdmin(), fn ($q) => $q->whereIn('users.id', $viewer->managedUserIds()));
     }
 
     public function edit(Did $did)
@@ -143,7 +150,7 @@ class DidController extends Controller
 
     public function update(StoreDidRequest $request, Did $did, TrunkProvisioner $trunks)
     {
-        $old = $did->only('number', 'label', 'status', 'max_concurrent_calls', 'rate_per_pulse', 'pulse_seconds', 'trunk', 'sip_host', 'sip_port', 'sip_username');
+        $old = $did->only('number', 'label', 'did_type', 'mrc', 'status', 'max_concurrent_calls', 'rate_per_pulse', 'pulse_seconds', 'trunk', 'sip_host', 'sip_port', 'sip_username');
         $did->update($this->sipAttributes($request->validated(), $did));
         $did->refresh();
         $action = $old['max_concurrent_calls'] != $did->max_concurrent_calls ? 'did.concurrency_changed' : 'did.updated';
@@ -176,6 +183,9 @@ class DidController extends Controller
     {
         Gate::authorize('manage', $did);
         $old = $did->status;
+        if ($old !== 'active' && $did->isExpired()) {
+            return back()->withErrors(['status' => 'The validity of this DID is over. Edit it and set a new validity date first.']);
+        }
         $did->update(['status' => $old === 'active' ? 'inactive' : 'active']);
         Audit::log('did.status_changed', $did, null, ['status' => $old], ['status' => $did->status]);
         if ($did->hasSip()) {

@@ -41,6 +41,12 @@ class DidSlotManager
             return DB::transaction(function () use ($attempt) {
                 $did = Did::whereKey($attempt->did_id)->lockForUpdate()->first();
 
+                if ($did && $did->isExpired()) {
+                    $this->lastDenial = 'expired'; // validity over: no calls until the date is extended (the DID also turns inactive)
+
+                    return false;
+                }
+
                 if (! $did || ! $did->isActive()) {
                     $this->lastDenial = 'inactive';
 

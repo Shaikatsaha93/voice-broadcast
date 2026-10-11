@@ -126,8 +126,8 @@ class CallReport extends Component
             'summary' => $summary,
             'campaigns' => Campaign::visibleTo($user)->orderBy('name')->get(['id', 'name']),
             'dids' => (match (true) {
-                $user->isSuperAdmin() => Did::query(),
-                $user->isAdmin() => Did::whereIn('dids.id', CallAttempt::visibleTo($user)->select('call_attempts.did_id')),
+                $user->isSystemAdmin() => Did::query(),
+                $user->isManager() => Did::whereIn('dids.id', CallAttempt::visibleTo($user)->select('call_attempts.did_id')),
                 default => $user->dids(),
             })->orderBy('number')->get(['dids.id', 'dids.number']),
             'statuses' => array_keys(self::STATUS_FILTERS),

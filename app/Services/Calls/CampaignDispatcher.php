@@ -41,7 +41,7 @@ class CampaignDispatcher
             if (! $this->slots->acquire($attempt)) {
                 $this->undoClaim($attempt);
                 // No balance: no call is generated. The campaign keeps waiting and resumes by itself after a top-up.
-                $this->setBlocked($campaign, $this->slots->lastDenial === 'balance' ? 'INSUFFICIENT_BALANCE' : null);
+                $this->setBlocked($campaign, match ($this->slots->lastDenial) { 'balance' => 'INSUFFICIENT_BALANCE', 'expired' => 'DID_EXPIRED', default => null });
                 break; // capacity full; slots freed by finalize re-trigger dispatch
             }
             $this->setBlocked($campaign, null);

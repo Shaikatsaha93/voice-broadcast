@@ -37,20 +37,23 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/audio/status', [AudioController::class, 'status'])->name('audio.status');
     Route::post('/audio', [AudioController::class, 'store'])->middleware('throttle:20,1')->name('audio.store');
     Route::post('/audio/{audio}/replace', [AudioController::class, 'replace'])->name('audio.replace');
+    Route::get('/audio/{audio}/download', [AudioController::class, 'download'])->name('audio.download');
     Route::delete('/audio/{audio}', [AudioController::class, 'destroy'])->name('audio.destroy');
     Route::get('/audio/{audio}/stream', [AudioController::class, 'stream'])->name('audio.stream');
 
     // Super Admin and Admin: user accounts, DIDs / SIP trunks, approvals and the audit trail. An Admin only reaches their own users and DIDs (UserPolicy / DidPolicy).
-    Route::middleware('role:super_admin,admin')->prefix('admin')->name('admin.')->group(function () {
+    Route::middleware('role:system_admin,super_admin,admin')->prefix('admin')->name('admin.')->group(function () {
         Route::resource('users', UserController::class)->except('destroy');
         Route::post('users/{user}/toggle', [UserController::class, 'toggle'])->name('users.toggle');
         Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset');
-        Route::get('audit', [AuditLogController::class, 'index'])->middleware('role:super_admin')->name('audit'); // Super Admin only
+        Route::get('audit', [AuditLogController::class, 'index'])->middleware('role:system_admin')->name('audit'); // System Admin only
 
-        // Approvals: Super Admin all campaigns, Admin only those of the users they created (CampaignPolicy::approve).
-        Route::get('approvals', [ApprovalController::class, 'index'])->name('approvals');
-        Route::post('approvals/{campaign}/approve', [ApprovalController::class, 'approve'])->name('approvals.approve');
-        Route::post('approvals/{campaign}/reject', [ApprovalController::class, 'reject'])->name('approvals.reject');
+        // Approvals: System Admin all campaigns, Super Admin those in their tree. Admins have no approval power.
+        Route::middleware('role:system_admin,super_admin')->group(function () {
+            Route::get('approvals', [ApprovalController::class, 'index'])->name('approvals');
+            Route::post('approvals/{campaign}/approve', [ApprovalController::class, 'approve'])->name('approvals.approve');
+            Route::post('approvals/{campaign}/reject', [ApprovalController::class, 'reject'])->name('approvals.reject');
+        });
 
         Route::post('dids/{did}/sip/apply', [DidController::class, 'sipApply'])->name('dids.sip.apply');
         Route::get('dids/{did}/sip/status', [DidController::class, 'sipStatus'])->name('dids.sip.status');

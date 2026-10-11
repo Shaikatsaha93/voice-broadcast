@@ -29,19 +29,17 @@
         ['Audio', 'audio.index', 'audio*', 'bi-music-note-beamed'],
         ['Reports', 'reports', 'reports*', 'bi-bar-chart-line'],
     ];
-    if (auth()->check() && auth()->user()->isSuperAdmin()) {
+    if (auth()->check() && auth()->user()->isManager()) {
+        if (! auth()->user()->isAdmin()) { // Admins have no approval power
+            $links[] = ['Approvals', 'admin.approvals', 'admin/approvals*', 'bi-check2-circle'];
+        }
         $links = array_merge($links, [
-            ['Approvals', 'admin.approvals', 'admin/approvals*', 'bi-check2-circle'],
-            ['Users', 'admin.users.index', 'admin/users*', 'bi-people'],
-            ['DIDs', 'admin.dids.index', 'admin/dids*', 'bi-telephone'],
-            ['Audit', 'admin.audit', 'admin/audit*', 'bi-journal-text'],
-        ]);
-    } elseif (auth()->check() && auth()->user()->isAdmin()) {
-        $links = array_merge($links, [
-            ['Approvals', 'admin.approvals', 'admin/approvals*', 'bi-check2-circle'],
             ['Users', 'admin.users.index', 'admin/users*', 'bi-people'],
             ['DIDs', 'admin.dids.index', 'admin/dids*', 'bi-telephone'],
         ]);
+        if (auth()->user()->isSystemAdmin()) {
+            $links[] = ['Audit', 'admin.audit', 'admin/audit*', 'bi-journal-text'];
+        }
     }
 @endphp
 

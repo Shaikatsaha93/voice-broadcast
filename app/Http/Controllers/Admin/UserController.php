@@ -20,7 +20,7 @@ class UserController extends Controller
     {
         Gate::authorize('manage', User::class);
         $users = User::with('roles', 'creator:id,name')->withCount('dids')
-            ->when(! $request->user()->isSuperAdmin(), fn ($q) => $q->whereIn('users.id', $request->user()->managedUserIds()))
+            ->when(! $request->user()->isSystemAdmin(), fn ($q) => $q->whereIn('users.id', $request->user()->managedUserIds()))
             ->orderBy('id')->paginate(20);
 
         return view('admin.users.index', compact('users'));
@@ -36,7 +36,7 @@ class UserController extends Controller
     public function store(StoreUserRequest $request)
     {
         $user = DB::transaction(function () use ($request) {
-            $user = User::create($request->safe()->only(['name', 'email', 'password', 'status']) + ['created_by' => $this->ownerId($request)]);
+            $user = User::create($request->safe()->only(['name', 'email', 'password', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null, 'created_by' => $this->ownerId($request)]);
             $user->roles()->sync([Role::where('name', $request->role)->value('id')]);
             Audit::log('user.created', $user, null, null, $user->only('name', 'email', 'status') + ['role' => $request->role]);
 
@@ -46,10 +46,14 @@ class UserController extends Controller
         return redirect()->route('admin.users.show', $user)->with('status', 'User created.');
     }
 
-    /** Admins a Super Admin can put a normal user under. */
+    /** Admins the viewer can put a user under: all for the System Admin, those in their own tree for a Super Admin. */
     private function admins()
     {
-        return User::whereHas('roles', fn ($r) => $r->where('name', Role::ADMIN))->orderBy('name')->get(['id', 'name']);
+        $viewer = auth()->user();
+
+        return User::whereHas('roles', fn ($r) => $r->where('name', Role::ADMIN))
+            ->when(! $viewer->isSystemAdmin(), fn ($q) => $q->whereIn('users.id', $viewer->managedUserIds()))
+            ->orderBy('name')->get(['id', 'name']);
     }
 
     /**
@@ -58,9 +62,9 @@ class UserController extends Controller
      */
     private function ownerId(Request $request): int
     {
-        if ($request->user()->isSuperAdmin() && $request->filled('owner_admin_id') && $request->role === Role::USER) {
+        if (! $request->user()->isAdmin() && $request->filled('owner_admin_id') && $request->role === Role::USER) {
             $owner = User::findOrFail($request->owner_admin_id);
-            abort_unless($owner->isAdmin(), 422, 'The selected owner is not an Admin.');
+            abort_unless($owner->isAdmin() && $request->user()->canManageUser($owner), 422, 'The selected owner is not one of your Admins.');
 
             return $owner->id;
         }
@@ -91,7 +95,7 @@ class UserController extends Controller
 
         DB::transaction(function () use ($request, $user) {
             $old = $user->only('name', 'email', 'status') + ['role' => $user->roles->first()?->name];
-            $data = $request->safe()->only(['name', 'email', 'status']);
+            $data = $request->safe()->only(['name', 'email', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null];
             if ($request->filled('owner_admin_id')) {
                 $data['created_by'] = $this->ownerId($request); // Super Admin moves a normal user under another Admin
             }
@@ -112,6 +116,9 @@ class UserController extends Controller
         abort_if($user->id === $request->user()->id, 422, 'You cannot deactivate yourself.');
 
         $old = $user->status;
+        if ($old !== 'active' && $user->isExpired() && User::roleNeedsValidity($user->roles->first()?->name)) {
+            return back()->withErrors(['status' => 'The validity of this account is over. Edit it and set a new validity date first.']);
+        }
         $user->update(['status' => $old === 'active' ? 'inactive' : 'active']);
         Audit::log('user.status_changed', $user, null, ['status' => $old], ['status' => $user->status]);
 

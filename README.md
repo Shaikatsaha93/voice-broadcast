@@ -13,7 +13,7 @@ composer install
 cp .env.example .env && php artisan key:generate
 npm install && npm run build
 php artisan migrate --seed          # roles + permissions
-php artisan app:create-admin admin@example.com   # first Super Admin, prompts for password (min 12 chars)
+php artisan app:create-admin admin@example.com   # first System Admin, prompts for password (min 12 chars)
 ```
 
 ## Environment (`.env`)
@@ -41,8 +41,9 @@ No Asterisk credential is hardcoded; everything comes from `.env`.
 ## Roles
 | Role | Can do |
 |---|---|
-| **Super Admin** | everything: create Admins and Users, register any DID, approve any campaign, run campaigns, see all activity and the **Audit** log (Super Admin only) |
-| **Admin** | create **users only**; register DIDs; approve campaigns of their own users; run their own campaigns; see only their own users' activity, campaigns, audio, reports and DIDs. Two admins never see each other's data. No Audit access |
+| **System Admin** (top) | everything: create Super Admins, Admins and Users, register any DID, approve any campaign, run campaigns, see all activity of every account and the **Audit** log (System Admin only) |
+| **Super Admin** | create Admins and Users; sees only their own tree (themself, the Admins and Users they created and everyone below them); approves campaigns of that tree, runs campaigns, registers DIDs inside that tree. Never sees another Super Admin's data. No Audit access |
+| **Admin** | create **users only**; register DIDs; run their own campaigns (their campaigns are approved by their Super Admin; an Admin has no approval power); see only their own users' activity, campaigns, audio, reports and DIDs. Two admins never see each other's data. No Audit access |
 | **User** | create and run own campaigns on the DIDs assigned to them, upload audio, see own reports and DID balance |
 
 Admins and Super Admins can do everything a User can (create, edit, submit, start, pause, resume, cancel, delete and retry campaigns) for their own campaigns and, for an Admin, their users' campaigns. Only Admin / Super Admin see the **Delete** button for audio. Ownership is stored in `users.created_by` and `dids.created_by`.
