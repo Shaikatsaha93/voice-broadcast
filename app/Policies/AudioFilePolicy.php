@@ -17,10 +17,10 @@ class AudioFilePolicy
         return $a->user_id === $u->id || $this->reviewer($u, $a);
     }
 
-    /** Replace the file: its owner (a User, or a Super / System Admin), or a System / Super Admin for audio in their tree. An Admin cannot replace audio. */
+    /** Replace the file: only a System Admin / Super Admin for audio in their tree. Admins and Users ask their Super Admin. */
     public function replace(User $u, AudioFile $a): bool
     {
-        return ($a->user_id === $u->id && ! $u->isAdmin()) || $this->reviewer($u, $a);
+        return $this->reviewer($u, $a);
     }
 
     /** Download the uploaded original (to convert it): System Admin / Super Admin only. */
