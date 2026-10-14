@@ -17,6 +17,11 @@ return [
     'default_country_prefix' => env('BROADCAST_COUNTRY_PREFIX', '880'),
     'originate_timeout_ms' => 45000,
 
+    // Credit reservation: a call reserves the pulses of (audio length + grace). Unknown audio length counts as default_call_seconds.
+    'call_grace_seconds' => (int) env('BROADCAST_CALL_GRACE', 10),
+    'default_call_seconds' => (int) env('BROADCAST_DEFAULT_CALL_SECONDS', 60),
+    'max_call_seconds' => (int) env('BROADCAST_MAX_CALL_SECONDS', 1800),
+
     'asterisk' => [
         'host' => env('ASTERISK_HOST'),
         'ami_port' => (int) env('ASTERISK_AMI_PORT', 5038),

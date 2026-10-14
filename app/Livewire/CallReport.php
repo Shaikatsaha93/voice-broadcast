@@ -89,6 +89,20 @@ class CallReport extends Component
         return $label;
     }
 
+    /** Days the date filter covers (null when it has no start date, i.e. all time). Used to spread the monthly MRC over the period. */
+    public function periodDays(): ?int
+    {
+        if ($this->dateMode === 'single') {
+            return self::validDate($this->date) ? 1 : null;
+        }
+        if (! self::validDate($this->from)) {
+            return null;
+        }
+        $to = self::validDate($this->to) ? \Carbon\Carbon::parse($this->to) : now();
+
+        return max(1, (int) \Carbon\Carbon::parse($this->from)->startOfDay()->diffInDays($to->startOfDay()) + 1);
+    }
+
     private static function validDate(string $v): bool
     {
         return $v !== '' && \Carbon\Carbon::hasFormat($v, 'Y-m-d');
@@ -180,7 +194,13 @@ class CallReport extends Component
             ? Did::visibleTo($user)->where(fn ($w) => $w->where('did_type', 'own')->orWhere('dids.mrc', '>', 0))->when($this->didId, fn ($q, $v) => $q->where('dids.id', $v))->orderBy('number')->get(['dids.id', 'dids.number', 'dids.label', 'dids.did_type', 'dids.mrc', 'dids.valid_until', 'dids.status'])
             : collect();
 
+        // MRC is a monthly expense: spread over the period (days / 30) and taken off the call profit.
+        $days = $this->periodDays();
+        $mrcExpense = $user->isManager() && $days !== null ? round((float) $mrcDids->sum('mrc') * $days / 30, 2) : null;
+
         return view('livewire.call-report', [
+            'mrcExpense' => $mrcExpense,
+            'netProfit' => $mrcExpense !== null ? round((float) $summary->profit - $mrcExpense, 4) : null,
             'attempts' => $q->latest('call_attempts.id')->paginate(25),
             'summary' => $summary,
             'breakdown' => $breakdown,

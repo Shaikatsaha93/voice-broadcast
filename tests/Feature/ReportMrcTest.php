@@ -28,7 +28,7 @@ class ReportMrcTest extends TestCase
 
         Livewire::test(CallReport::class)
             ->assertSee('MRC of DIDs')->assertSee('8801700000001')->assertSee('8801700000002')
-            ->assertSee('MRC (monthly)')->assertSee('4000.50')->assertDontSeeHtml('<td class="tabular-nums">8801700000003</td>');
+            ->assertSee('MRC expense')->assertSee('Net profit')->assertSee('4000.50')->assertSee('933.45')->assertDontSeeHtml('<td class="tabular-nums">8801700000003</td>');
     }
 
     public function test_did_filter_narrows_the_mrc(): void
@@ -61,5 +61,24 @@ class ReportMrcTest extends TestCase
         $this->actingAs($admin);
         Livewire::test(CallReport::class)->assertSee('MRC / month')->assertSeeHtml('<td class="text-right tabular-nums">৳1200.00</td></tr>')
             ->assertSeeHtml('<td class="text-right tabular-nums">৳1200.00</td></tr></tfoot>');
+    }
+
+    public function test_mrc_expense_is_spread_over_the_period_and_taken_off_the_profit(): void
+    {
+        $this->actingAs($this->makeUser(Role::SYSTEM_ADMIN));
+        $this->ownDid('8801700000001', '3000');
+
+        // One day = 3000 / 30 = 100.00; a 30-day range = the whole month.
+        $t = Livewire::withQueryParams(['dateMode' => 'single'])->test(CallReport::class)->set('dateMode', 'single')->set('date', now()->toDateString());
+        $this->assertSame(100.0, $t->viewData('mrcExpense'));
+        $this->assertSame(-100.0, $t->viewData('netProfit'));
+
+        $t = Livewire::withQueryParams(['dateMode' => 'range'])->test(CallReport::class)->set('from', now()->subDays(29)->toDateString())->set('to', now()->toDateString());
+        $this->assertSame(3000.0, $t->viewData('mrcExpense'));
+
+        // All time: no start date, so no expense can be spread.
+        $t = Livewire::withQueryParams(['dateMode' => 'range'])->test(CallReport::class)->set('from', '')->set('to', '');
+        $this->assertNull($t->viewData('mrcExpense'));
+        $this->assertNull($t->viewData('netProfit'));
     }
 }

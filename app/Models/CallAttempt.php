@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CallAttempt extends Model
 {
-    protected $fillable = ['call_ref', 'campaign_id', 'recipient_id', 'did_id', 'user_id', 'phone', 'attempt_no', 'status', 'status_rank', 'asterisk_uniqueid', 'asterisk_linkedid', 'channel', 'hangup_cause', 'dial_status', 'dialed_at', 'answered_at', 'ended_at', 'duration', 'billsec', 'pulses', 'cost', 'billed_at', 'finalized'];
+    protected $fillable = ['call_ref', 'campaign_id', 'recipient_id', 'did_id', 'user_id', 'phone', 'attempt_no', 'status', 'status_rank', 'asterisk_uniqueid', 'asterisk_linkedid', 'channel', 'hangup_cause', 'dial_status', 'dialed_at', 'answered_at', 'ended_at', 'duration', 'billsec', 'max_seconds', 'pulses', 'cost', 'billed_at', 'finalized'];
 
     protected function casts(): array
     {

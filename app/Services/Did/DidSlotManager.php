@@ -73,24 +73,43 @@ class DidSlotManager
                     return false;
                 }
 
-                // Prepaid balance: it must cover one pulse for this call plus one for every call already in flight.
-                if (! $did->canAffordAnotherCall($inFlight)) {
-                    $this->lastDenial = 'balance';
+                // Prepaid credit reservation: the balance must cover this call AND every call already in flight, each at its
+                // expected length (audio + grace). The call is hung up at that length, so the balance cannot go below 0.
+                $credit = app(CallCredit::class);
+                $expected = $credit->expectedSeconds($campaign->audio);
+                $billed = [];
 
-                    return false;
-                }
-
-                // The Admin this caller belongs to must have balance too (at the rate the Super Admin gave that Admin).
-                $admin = $campaign->user?->billingAdmin();
-                if ($admin) {
-                    $adminRow = User::whereKey($admin->id)->lockForUpdate()->first();
-                    $adminInFlight = DidSlot::whereIn('call_attempt_id', CallAttempt::whereIn('user_id', $adminRow->visibleOwnerIds())->select('id'))->count();
-                    if (! $adminRow->canAffordAnotherCall($adminInFlight)) {
-                        $this->lastDenial = 'admin_balance';
+                $didRate = (float) $did->rate_per_pulse;
+                $didPulse = max(1, (int) $did->pulse_seconds);
+                if ($didRate > 0) {
+                    $needed = $credit->inFlightPulses(DidSlot::where('did_slots.did_id', $did->id), $didPulse) + $credit->pulses($expected, $didPulse);
+                    if ((float) $did->balance + 1e-9 < $didRate * $needed) {
+                        $this->lastDenial = 'balance';
 
                         return false;
                     }
                 }
+                $billed[] = [$didRate, $didPulse];
+
+                // The Admin this caller belongs to must have credit too (at the rate the Super Admin gave that Admin).
+                $admin = $campaign->user?->billingAdmin();
+                if ($admin) {
+                    $adminRow = User::whereKey($admin->id)->lockForUpdate()->first();
+                    $adminRate = (float) $adminRow->rate_per_pulse;
+                    $adminPulse = max(1, (int) $adminRow->pulse_seconds);
+                    if ($adminRate > 0) {
+                        $adminSlots = DidSlot::whereIn('did_slots.call_attempt_id', CallAttempt::whereIn('user_id', $adminRow->visibleOwnerIds())->select('id'));
+                        $needed = $credit->inFlightPulses($adminSlots, $adminPulse) + $credit->pulses($expected, $adminPulse);
+                        if ((float) $adminRow->balance + 1e-9 < $adminRate * $needed) {
+                            $this->lastDenial = 'admin_balance';
+
+                            return false;
+                        }
+                    }
+                    $billed[] = [$adminRate, $adminPulse];
+                }
+
+                $attempt->update(['max_seconds' => $credit->limitSeconds($expected, $billed)]);
 
                 DidSlot::create([
                     'did_id' => $did->id,

@@ -5,6 +5,7 @@ namespace App\Services\Calls;
 use App\Enums\CallStatus;
 use App\Enums\CampaignStatus;
 use App\Jobs\DispatchCampaignCalls;
+use App\Jobs\EnforceCallCreditLimit;
 use App\Jobs\FinalizeCampaign;
 use App\Models\CallAttempt;
 use App\Models\CampaignRecipient;
@@ -22,14 +23,25 @@ class CallLifecycle
     /** Apply a non-terminal status. Never moves a call backwards (out-of-order safe). */
     public function advance(CallAttempt $attempt, CallStatus $to, array $extra = []): void
     {
-        DB::transaction(function () use ($attempt, $to, $extra) {
+        $limit = null;
+
+        DB::transaction(function () use ($attempt, $to, $extra, &$limit) {
             $a = CallAttempt::whereKey($attempt->id)->lockForUpdate()->first();
             if ($a->finalized || $to->rank() <= $a->status_rank) {
                 return;
             }
+            $wasAnswered = $a->answered_at !== null;
             $a->fill($extra + ['status' => $to, 'status_rank' => $to->rank()])->save();
             $this->slots->touch($a);
+            if (! $wasAnswered && $a->answered_at && $a->max_seconds) {
+                $limit = [$a->id, (int) $a->max_seconds];
+            }
         });
+
+        // Answered: hang the call up when the credit reserved for it runs out (2 s early, so the last pulse is not exceeded).
+        if ($limit) {
+            EnforceCallCreditLimit::dispatch($limit[0])->delay(max(1, $limit[1] - 2));
+        }
     }
 
     /**

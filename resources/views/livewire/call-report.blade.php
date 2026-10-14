@@ -49,7 +49,7 @@
         $isMgr = auth()->user()->isManager();
         $callCards = ['Attempts' => $summary->total, 'Answered' => $summary->answered, 'No Answer' => $summary->no_answer, 'Busy' => $summary->busy, 'Failed' => $summary->failed, 'Duration (s)' => $summary->duration];
         $moneyCards = $isMgr
-            ? ['Billsec' => $summary->billsec, 'Charged' => \App\Support\Money::tk($summary->cost), 'Admin cost' => \App\Support\Money::tk($summary->admin_cost), 'Profit' => \App\Support\Money::tk($summary->profit), 'MRC (monthly)' => \App\Support\Money::tk($mrcDids->sum('mrc'))]
+            ? ['Billsec' => $summary->billsec, 'Charged' => \App\Support\Money::tk($summary->cost), 'Admin cost' => \App\Support\Money::tk($summary->admin_cost), 'Profit' => \App\Support\Money::tk($summary->profit), 'MRC expense' => $mrcExpense !== null ? \App\Support\Money::tk($mrcExpense) : '-', 'Net profit' => $netProfit !== null ? \App\Support\Money::tk($netProfit) : '-']
             : ['Billsec' => $summary->billsec, 'Cost' => \App\Support\Money::tk($summary->cost)];
         $tones = ['indigo', 'emerald', 'amber', 'sky', 'pink', 'indigo'];
     @endphp
@@ -59,7 +59,7 @@
                 <div class="vb-stat vb-{{ $tones[$loop->index] }} !p-4"><div class="label !text-xs">{{ $l }}</div><div class="value !text-2xl">{{ $v ?? 0 }}</div></div>
             @endforeach
         </div>
-        <div class="grid grid-cols-2 gap-3 {{ $isMgr ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-2 lg:grid-cols-2' }}">
+        <div class="grid grid-cols-2 gap-3 {{ $isMgr ? 'sm:grid-cols-3 lg:grid-cols-6' : 'sm:grid-cols-2 lg:grid-cols-2' }}">
             @foreach($moneyCards as $l => $v)
                 <div class="vb-stat vb-{{ $tones[($loop->index + 2) % 6] }} !p-4"><div class="label !text-xs">{{ $l }}</div><div class="value !text-2xl">{{ $v ?? 0 }}</div></div>
             @endforeach
@@ -109,7 +109,7 @@
     @if(auth()->user()->isManager() && $mrcDids->isNotEmpty())
     <div class="vb-card p-4">
         <h2 class="font-semibold"><i class="bi bi-calendar-check"></i> MRC of DIDs</h2>
-        <p class="mb-2 text-xs text-base-content/70">Own DIDs have no per-call charge, only a fixed monthly recurring charge (MRC). Reseller DIDs are listed too when they have an MRC. This is the MRC per month, not tied to the date filter.</p>
+        <p class="mb-2 text-xs text-base-content/70">Own DIDs have no per-call charge, only a fixed monthly recurring charge (MRC). Reseller DIDs are listed too when they have an MRC. The table shows the MRC per month. The <b>MRC expense</b> card spreads it over the period above (MRC x days / 30) and <b>Net profit</b> = Profit - MRC expense; with no start date (all time) they show -.</p>
         <div class="overflow-x-auto">
             <table class="vb-table table-sm w-full">
                 <thead><tr><th class="text-left">DID</th><th class="text-left">Label</th><th class="text-left">Type</th><th class="text-left">Status</th><th class="text-left">Valid until</th><th class="text-right">MRC / month</th></tr></thead>
