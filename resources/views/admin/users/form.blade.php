@@ -6,6 +6,7 @@
         <h1 class="vb-title">{{ $user->exists ? 'Edit' : 'Create' }} user</h1>
         <label class="block"><span class="mb-1 block text-sm">Name</span><input name="name" value="{{ old('name', $user->name) }}" class="input w-full" required></label>
         <label class="block"><span class="mb-1 block text-sm">Email</span><input name="email" type="email" value="{{ old('email', $user->email) }}" class="input w-full" required></label>
+        <label class="block"><span class="mb-1 block text-sm">Company name <span class="text-xs text-base-content/65">(optional)</span></span><input name="company_name" value="{{ old('company_name', $user->company_name) }}" maxlength="150" class="input w-full" autocomplete="organization"></label>
         <label class="block"><span class="mb-1 block text-sm">Password</span><input name="password" type="password" placeholder="{{ $user->exists ? 'New password (optional, min 12)' : 'Min 12 characters' }}" class="input w-full" @required(! $user->exists)></label>
         <div class="grid gap-3 sm:grid-cols-2">
             <label class="block"><span class="mb-1 block text-sm">Role</span><select name="role" class="select w-full">@foreach(array_intersect_key(['user' => 'User', 'admin' => 'Admin', 'super_admin' => 'Super Admin', 'system_admin' => 'System Admin'], array_flip(auth()->user()->assignableRoles())) as $v => $l)<option value="{{ $v }}" @selected(old('role', $user->exists ? $user->roles->first()?->name : 'user') === $v)>{{ $l }}</option>@endforeach</select></label>

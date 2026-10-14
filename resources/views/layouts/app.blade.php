@@ -77,10 +77,11 @@
                 <i class="bi bi-sun-fill vb-icon-sun text-lg text-warning"></i>
             </button>
             @auth
-                <div class="hidden items-center gap-2 rounded-full bg-base-200 py-1 pl-1 pr-3 md:flex">
+                <a href="{{ route('profile') }}" title="My profile" class="hidden items-center gap-2 rounded-full bg-base-200 py-1 pl-1 pr-3 hover:bg-base-300 md:flex">
                     <span class="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-content">{{ strtoupper(mb_substr(auth()->user()->name, 0, 1)) }}</span>
                     <span class="text-sm font-medium">{{ auth()->user()->name }}</span>
-                </div>
+                </a>
+                <a href="{{ route('profile') }}" class="btn btn-ghost btn-circle btn-sm md:hidden" aria-label="My profile" title="My profile"><i class="bi bi-person-circle text-lg"></i></a>
                 <form method="POST" action="{{ route('logout') }}">@csrf
                     <button class="btn btn-outline btn-sm rounded-full"><i class="bi bi-box-arrow-right"></i><span class="hidden sm:inline">Logout</span></button>
                 </form>

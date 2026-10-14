@@ -22,13 +22,19 @@ use Illuminate\Validation\ValidationException;
 
 class DidController extends Controller
 {
-    public function index(DidSlotManager $slots, TrunkProvisioner $trunks)
+    public function index(Request $request, DidSlotManager $slots, TrunkProvisioner $trunks)
     {
         Gate::authorize('manage', Did::class);
         $trunks->refreshStatuses();
-        $dids = Did::visibleTo(auth()->user())->with('users:id,name')->withCount('slots as active_calls')->orderBy('id')->paginate(25);
 
-        return view('admin.dids.index', compact('dids'));
+        // Optional ?status=active|inactive filter (linked from the dashboard); anything else is ignored.
+        $status = in_array($request->query('status'), ['active', 'inactive'], true) ? $request->query('status') : null;
+
+        $dids = Did::visibleTo($request->user())->with('users:id,name')->withCount('slots as active_calls')
+            ->when($status, fn ($q) => $q->where('dids.status', $status))
+            ->orderBy('id')->paginate(25)->withQueryString();
+
+        return view('admin.dids.index', compact('dids', 'status'));
     }
 
     public function create()
@@ -42,12 +48,12 @@ class DidController extends Controller
     private function sipAttributes(array $data, ?Did $did = null): array
     {
         unset($data['opening_balance']);
-        // Own DID: no per-call charge, only an MRC. Reseller DID: per-call charge, no MRC.
+        // Own DID: no per-call charge, only an MRC. Reseller DID: per-call charge plus an optional MRC (0 = none).
         if (($data['did_type'] ?? 'reseller') === 'own') {
             $data['rate_per_pulse'] = 0;
             $data['pulse_seconds'] = 60;
         } else {
-            $data['mrc'] = null;
+            $data['mrc'] = (float) ($data['mrc'] ?? 0);
         }
         $sip = ['sip_host', 'sip_port', 'sip_username', 'sip_password'];
         $rest = array_diff_key($data, array_flip($sip));

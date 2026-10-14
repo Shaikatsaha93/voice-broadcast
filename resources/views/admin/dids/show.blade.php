@@ -2,7 +2,7 @@
 @section('content')
 <div class="mb-4">
     <h1 class="vb-title">{{ $did->number }}</h1>
-    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-base-content/75">{{ $did->label }} · <span class="badge badge-soft badge-sm {{ $did->isOwn() ? 'badge-secondary' : 'badge-primary' }}">{{ $did->isOwn() ? 'Own DID' : 'Reseller DID' }}</span>@if($did->isOwn()) · MRC {{ \App\Support\Money::tk($did->mrc) }}@endif@if($did->valid_until) · valid until {{ $did->valid_until->format('Y-m-d') }}@if($did->isExpired()) <span class="badge badge-error badge-soft badge-sm">EXPIRED</span>@endif @endif · <x-status :value="$did->status" /> · {{ $active }}/{{ $did->max_concurrent_calls }} active</div>
+    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-base-content/75">{{ $did->label }} · <span class="badge badge-soft badge-sm {{ $did->isOwn() ? 'badge-secondary' : 'badge-primary' }}">{{ $did->isOwn() ? 'Own DID' : 'Reseller DID' }}</span>@if($did->isOwn() || $did->mrc > 0) · MRC {{ \App\Support\Money::tk($did->mrc) }}@endif@if($did->valid_until) · valid until {{ $did->valid_until->format('Y-m-d') }}@if($did->isExpired()) <span class="badge badge-error badge-soft badge-sm">EXPIRED</span>@endif @endif · <x-status :value="$did->status" /> · {{ $active }}/{{ $did->max_concurrent_calls }} active</div>
 </div>
 <div class="mb-6 flex flex-wrap gap-2">
     <a class="btn btn-outline btn-sm" href="{{ route('admin.dids.edit', $did) }}"><i class="bi bi-pencil"></i>Edit / concurrency</a>

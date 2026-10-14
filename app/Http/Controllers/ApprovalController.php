@@ -27,6 +27,12 @@ class ApprovalController extends Controller
     public function approve(Request $request, Campaign $campaign)
     {
         Gate::authorize('approve', $campaign);
+
+        // A replaced audio file goes back to UPLOADED and is converted again; never start a campaign on audio that is not READY.
+        if (! $campaign->audio?->isReady()) {
+            return back()->withErrors(['audio' => 'The audio is not READY yet. Wait until it has been processed, then approve.']);
+        }
+
         $this->service->approve($campaign, $request->user());
 
         $campaign->refresh();

@@ -18,6 +18,7 @@ class StoreUserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:150', 'unique:users,email'],
+            'company_name' => ['nullable', 'string', 'max:150'],
             'password' => ['required', Password::min(12)],
             // Super Admin: any role. Admin: normal users only (enforced here, not just hidden in the form).
             'role' => ['required', Rule::in($this->user()->assignableRoles())],

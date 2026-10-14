@@ -19,6 +19,7 @@ class UpdateUserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($this->route('user'))],
+            'company_name' => ['nullable', 'string', 'max:150'],
             'password' => ['nullable', Password::min(12)],
             'role' => ['required', Rule::in($this->user()->assignableRoles())],
             'status' => ['required', Rule::in(['active', 'inactive'])],

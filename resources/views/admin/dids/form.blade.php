@@ -48,6 +48,11 @@
         @else
             <p class="text-xs text-base-content/70">To add or remove balance, use the Balance section on the DID page.</p>
         @endunless
+                    <div class="mt-3">
+                        <span class="mb-1 block text-sm">Monthly recurring charge (MRC)</span>
+                        <label class="input flex w-full items-center gap-1"><span class="font-semibold text-base-content/70">{{ config('broadcast.currency', '৳') }}</span><input name="mrc" type="number" step="0.01" min="0" value="{{ old('mrc', $did->mrc ?? 0) }}" class="grow" placeholder="MRC per month (0 = none)"></label>
+                        <p class="mt-1 text-xs text-base-content/60">Optional. Enter 0 if this reseller DID has no monthly charge.</p>
+                    </div>
                     <label class="mt-3 block"><span class="mb-1 block text-sm">Opening balance valid until</span><input name="valid_until" type="date" required value="{{ old('valid_until', $did->valid_until?->toDateString()) }}" class="input w-full"></label>
                 </div>
                 <div id="panel-own" @class(['hidden' => $type !== 'own'])>

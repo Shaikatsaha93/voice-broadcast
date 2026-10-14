@@ -1,8 +1,15 @@
 <div wire:poll.5s class="space-y-6">
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 {{ count($cards) % 4 === 0 ? 'lg:grid-cols-4' : 'lg:[grid-template-columns:repeat(var(--n),minmax(0,1fr))]' }}" style="--n: {{ count($cards) }}">
+        @php $cardLinks = ['Total users' => route('admin.users.index'), 'Total DIDs' => route('admin.dids.index'), 'Active DIDs' => route('admin.dids.index', ['status' => 'active']), 'Pending campaigns' => route('admin.approvals'), 'My campaigns' => route('campaigns.index')]; @endphp
         @foreach($cards as $label => $value)
             @php $tone = ['indigo', 'pink', 'sky', 'emerald', 'amber'][$loop->index % 5]; @endphp
-            <div class="vb-stat vb-{{ $tone }}"><div class="label">{{ $label }}</div><div class="value">{{ $value }}</div></div>
+            @if(isset($cardLinks[$label]))
+                <a href="{{ $cardLinks[$label] }}" class="vb-stat vb-{{ $tone }} block cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" title="Open {{ strtolower(str_replace('Total ', '', $label)) }}">
+                    <div class="label flex items-center justify-between gap-2">{{ $label }}<i class="bi bi-arrow-right-circle text-lg opacity-70"></i></div><div class="value">{{ $value }}</div>
+                </a>
+            @else
+                <div class="vb-stat vb-{{ $tone }}"><div class="label">{{ $label }}</div><div class="value">{{ $value }}</div></div>
+            @endif
         @endforeach
     </div>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4">

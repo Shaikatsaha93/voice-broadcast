@@ -36,7 +36,7 @@ class UserController extends Controller
     public function store(StoreUserRequest $request)
     {
         $user = DB::transaction(function () use ($request) {
-            $user = User::create($request->safe()->only(['name', 'email', 'password', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null, 'created_by' => $this->ownerId($request)] + $this->wallet($request, true));
+            $user = User::create($request->safe()->only(['name', 'email', 'company_name', 'password', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null, 'created_by' => $this->ownerId($request)] + $this->wallet($request, true));
             $user->roles()->sync([Role::where('name', $request->role)->value('id')]);
             app(\App\Services\UserBalance::class)->recordOpening($user, $request->user()->id);
             Audit::log('user.created', $user, null, null, $user->only('name', 'email', 'status') + ['role' => $request->role]);
@@ -128,7 +128,7 @@ class UserController extends Controller
 
         DB::transaction(function () use ($request, $user) {
             $old = $user->only('name', 'email', 'status') + ['role' => $user->roles->first()?->name];
-            $data = $request->safe()->only(['name', 'email', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null] + $this->wallet($request, false);
+            $data = $request->safe()->only(['name', 'email', 'company_name', 'status']) + ['valid_until' => User::roleNeedsValidity($request->role) ? $request->valid_until : null] + $this->wallet($request, false);
             if ($request->filled('owner_admin_id')) {
                 $data['created_by'] = $this->ownerId($request); // Super Admin moves a normal user under another Admin
             }

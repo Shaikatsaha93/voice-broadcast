@@ -25,7 +25,8 @@ class StoreDidRequest extends FormRequest
             'pulse_seconds' => $this->isOwn() ? ['nullable'] : ['required', 'integer', 'between:1,3600'],
             // Required last valid day of the balance (reseller) / MRC (own). A new date cannot be in the past.
             'valid_until' => ['required', 'date', fn ($attr, $value, $fail) => $this->validityOk($value) ?: $fail('The validity date cannot be in the past.')],
-            'mrc' => $this->isOwn() ? ['required', 'numeric', 'gt:0', 'max:99999999'] : ['nullable'],
+            // Own DID: MRC above 0 is required. Reseller DID: MRC is optional, 0 (or blank) means none.
+            'mrc' => $this->isOwn() ? ['required', 'numeric', 'gt:0', 'max:99999999'] : ['nullable', 'numeric', 'min:0', 'max:99999999'],
             // Opening balance only when the DID is created; afterwards use Add / Remove balance (ledger).
             'opening_balance' => $this->route('did') ? ['prohibited'] : ($this->isOwn() ? ['nullable'] : ['nullable', 'numeric', 'min:0', 'max:99999999']),
             'sip_host' => [Rule::requiredIf(fn () => $this->sipRequired()), 'nullable', 'string', 'max:190', 'regex:/^[A-Za-z0-9]([A-Za-z0-9.\-]*[A-Za-z0-9])?$/'],

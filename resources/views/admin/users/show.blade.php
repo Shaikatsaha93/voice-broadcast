@@ -2,7 +2,7 @@
 @section('content')
 <div class="mb-4">
     <h1 class="vb-title">{{ $user->name }}</h1>
-    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-base-content/75">{{ $user->email }} · {{ $user->roles->first()?->label }} · <x-status :value="$user->status" />@if($user->rate_per_pulse !== null) · call charge {{ \App\Support\Money::rate($user->rate_per_pulse, $user->pulse_seconds) }} · balance {{ \App\Support\Money::tk($user->balance ?? 0) }}@endif@if($user->valid_until) · valid until {{ $user->valid_until->format('Y-m-d') }}@if($user->isExpired()) <span class="badge badge-error badge-soft badge-sm">EXPIRED</span>@endif @endif</div>
+    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-base-content/75">{{ $user->email }}@if($user->company_name) · <i class="bi bi-building"></i> {{ $user->company_name }}@endif · {{ $user->roles->first()?->label }} · <x-status :value="$user->status" />@if($user->rate_per_pulse !== null) · call charge {{ \App\Support\Money::rate($user->rate_per_pulse, $user->pulse_seconds) }} · balance {{ \App\Support\Money::tk($user->balance ?? 0) }}@endif@if($user->valid_until) · valid until {{ $user->valid_until->format('Y-m-d') }}@if($user->isExpired()) <span class="badge badge-error badge-soft badge-sm">EXPIRED</span>@endif @endif</div>
 </div>
 <div class="mb-6 flex flex-wrap gap-2">
     <form method="POST" action="{{ route('admin.users.toggle', $user) }}">@csrf<button class="btn btn-outline btn-sm">{{ $user->status === 'active' ? 'Deactivate' : 'Activate' }}</button></form>
