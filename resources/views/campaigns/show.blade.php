@@ -23,7 +23,7 @@
 <div class="flex flex-wrap gap-2">
     @can('update', $campaign)
         <a class="btn btn-outline" href="{{ route('campaigns.edit', $campaign) }}">Edit</a>
-        <form method="POST" action="{{ route('campaigns.import', $campaign) }}" enctype="multipart/form-data" class="flex gap-1">@csrf<input type="file" name="numbers" accept=".csv,.txt" required><button class="btn btn-outline">Upload CSV</button></form>
+        <form method="POST" action="{{ route('campaigns.import', $campaign) }}" enctype="multipart/form-data" class="flex flex-nowrap items-center gap-2">@csrf<input type="file" name="numbers" accept=".csv,.txt" required class="file-input file-input-bordered file-input-sm w-44 sm:w-56"><button class="btn btn-outline shrink-0">Upload CSV</button></form>
     @endcan
     @can('submit', $campaign)<form method="POST" action="{{ route('campaigns.submit', $campaign) }}">@csrf<button class="btn btn-primary">Submit for approval</button></form>@endcan
     @can('control', $campaign)
